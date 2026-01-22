@@ -14,51 +14,17 @@ The system supports four distinct product lines:
 
 ## Key Features
 
-### Intelligent DXF Processing
-- Automatic extraction of components from AutoCAD DXF files
-- Component mapping and specification analysis
-- Dimension and layout identification
-- Support for conveyors, diverters, scanners, and automation equipment
-
-### Automated Document Generation
-- Professional cover pages with client logo integration
-- Executive summaries and personalized cover letters
-- Detailed system descriptions and technical specifications
-- Component catalogs with manufacturer details
-- Process flow diagrams and layout overviews
-- Capacity calculations and performance metrics
-- Commercial terms and pricing tables
-- Warranty configurations and exclusions
-- Safety protocols and compliance documentation
-- Glossary and technical terminology
-
-### Dynamic Content Management
-- Client-specific customization
-- Real-time capacity calculations based on system parameters
-- Flexible warranty and exclusion configurations
-- Manufacturer and component database management
-- Reference project integration
-- Multi-language support capabilities
-
-### AI-Powered Content Generation
-- GROQ API integration for intelligent text generation
-- Context-aware system descriptions
-- Process flow optimization
-- Consistency validation across sections
-- Semantic search for reference materials
-
-### User-Friendly Interface
-- Intuitive tab-based navigation with persistent state
-- Drag-and-drop file upload support
-- Interactive configuration panels
-- Real-time preview and validation
-- Session state management for seamless workflow
-- Role-based access control with user authentication
+- Intelligent DXF ingestion with automatic extraction, mapping, and layout analysis of conveyors, scanners, and automation components.
+- End-to-end automated document generation including cover pages, system descriptions, specifications, process flows, pricing, and compliance sections.
+- Dynamic, client-specific content with real-time capacity calculations, configurable warranties, and component databases.
+- AI-powered content generation using GROQ for context-aware narratives, consistency checks, and optimized process descriptions.
+- Integrated component catalogs, reference projects, and manufacturer data for accurate technical documentation.
+- User-friendly, tab-based interface with drag-and-drop uploads, interactive configuration, and live previews.
 
 ## System Requirements
 
 ### Software Requirements
-- Python 3.8 or higher
+- Python 3.11 or higher
 - Windows OS (for docx2pdf conversion)
 - Microsoft Word (optional, for DOCX to PDF conversion)
 
@@ -402,18 +368,8 @@ Internal use only. Proprietary software for FALCON Autotech.
 ## Contact
 
 For support or questions, contact:
-- Technical Lead: sanyog.singh@falconautotech.com
-- General Manager: tuhi@falconautoonline.com
-
-## Version History
-
-### V9 (Current)
-- Multi-system support (CBS, Neo, Cubizone, Robodome 2.0)
-- AI-powered content generation
-- Enhanced DXF processing
-- Improved user interface with persistent navigation
-- Role-based authentication
-- Real-time document preview
+- Principal Engineer : Balmukund.Mishra@falconautotech.com
+- Senior Engineer: arkajyoti.chakraborty@falconautotech.com
 
 ---
 
