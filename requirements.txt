@@ -1,0 +1,44 @@
+# SPAS - Smart Proposal Automation System
+# Python Dependencies
+# Generated for Python 3.8+
+
+# Core Framework
+streamlit==1.31.0
+
+# Document Processing
+python-docx==1.1.0
+docxcompose==1.4.0
+ezdxf==1.2.0
+openpyxl==3.1.2
+pdfplumber==0.10.3
+docx2pdf==0.1.8
+
+# AI and Machine Learning
+groq==0.4.2
+sentence-transformers==2.3.1
+bert-score==0.3.13
+torch==2.1.2
+transformers==4.36.2
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.3
+
+# Image Processing
+Pillow==10.2.0
+
+# API and Networking
+requests==2.31.0
+convertapi==1.7.0
+
+# Utilities
+python-dotenv==1.0.0
+pythoncom==0.0.1
+pywin32==306
+
+# Vector Database (Optional - if using Pinecone)
+pinecone-client==3.0.0
+
+# Additional Dependencies
+dataclasses-json==0.6.3
+typing-extensions==4.9.0
