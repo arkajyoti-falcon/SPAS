@@ -1,0 +1,142 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                    DXF EXTRACTION - QUICK REFERENCE                             ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌─ USING THE TOOL ────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  METHOD 1: Batch File (Easiest for Windows)                                    │
+│  ────────────────────────────────────────────                                  │
+│   Double-click: extract_dxf.bat                                                │
+│   Or from CMD:   extract_dxf.bat "OUTPUT\DXF Upload\file.dxf"                 │
+│                                                                                  │
+│  METHOD 2: Python Command Line                                                 │
+│  ──────────────────────────────                                                │
+│   python print_dxf_info.py "OUTPUT\DXF Upload\file.dxf"                       │
+│   python print_dxf_info.py "file.dxf" "Project Name"                          │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ WHAT GETS EXTRACTED ───────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  1. FILE METADATA                                                              │
+│     • Filename, units (meters/inches), unit codes                              │
+│                                                                                  │
+│  2. SYSTEM TYPE DETECTION (Automatic)                                          │
+│     CBS Type:      12K_CHUTE | 20K_LOOP | STANDARD                            │
+│     Induction:     AUTO | MANUAL | MIXED | UNKNOWN                            │
+│                                                                                  │
+│  3. SYSTEM FEATURES (Present/Absent Checks)                                    │
+│     ✓ Auto Induction       - Automated item feeding                           │
+│     ✓ Operator Stations    - Manual sorting workstations                      │
+│     ✓ VDS System           - Vertical diverters (qty tracked)                 │
+│     ✓ Bag Takeaway         - Automated bagging/packaging                      │
+│     ✓ Recirculation        - Re-feed capability                               │
+│     ✓ Scanner System       - Barcode/weight readers                           │
+│                                                                                  │
+│  4. COMPONENT CATEGORIZATION                                                   │
+│     Conveyors:       Infeed, Main, Buffer, Curve, Merge                       │
+│     Output:          Chutes, Bags, Recirculation                              │
+│     Induction:       Sorters, Baggers, Operator Stations                      │
+│     Systems:         VDS, Scanners, Uncategorized                             │
+│                                                                                  │
+│  5. COMPONENT QUANTITIES                                                       │
+│     Count by category | Count by specific component | Total components        │
+│                                                                                  │
+│  6. CHUTE ANALYSIS                                                             │
+│     Total chutes | Types (collection, rejection, direct) | Per-zone breakdown │
+│                                                                                  │
+│  7. RAW DXF BLOCKS                                                             │
+│     All block names as they appear in DXF file | Occurrence count             │
+│                                                                                  │
+│  8. JSON EXPORT                                                                │
+│     Saved to: OUTPUT/DXF Upload/extractions/{filename}_extraction.json        │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ OUTPUT EXAMPLE ────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  SYSTEM DETECTION                                                              │
+│  ────────────────                                                              │
+│  CBS Type ..................... 20K_LOOP                                       │
+│  Induction Type ............... AUTO                                           │
+│  Total Components Found ....... 157                                            │
+│                                                                                  │
+│  SYSTEM FEATURES                                                               │
+│  ────────────────                                                              │
+│  Auto Induction System ........ ✓ YES                                          │
+│  Operator Stations ............ ✗ NO                                           │
+│  VDS (Vertical Divert) ........ ✓ YES (3 units)                               │
+│  Bag Takeaway System .......... ✓ YES                                          │
+│  Recirculation System ......... ✓ YES                                          │
+│  Scanner System .............. ✓ YES (5 scanners)                             │
+│                                                                                  │
+│  COMPONENT BREAKDOWN                                                           │
+│  ──────────────────                                                            │
+│  Conveyors ................... 45 units                                        │
+│  Output Chutes ............... 28 units                                        │
+│  Scanners .................... 5 units                                         │
+│  Auto Induction .............. 3 units                                         │
+│  VDS Buffers ................. 3 units                                         │
+│  Other ....................... 73 units                                        │
+│  ─────────────────────────────────                                             │
+│  TOTAL ....................... 157 units                                       │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ HOW DATA FLOWS ────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│   DXF File                                                                     │
+│      ↓                                                                         │
+│   Extract DXF Components (categorize all blocks)                               │
+│      ↓                                                                         │
+│   DXF JSON Data                                                                │
+│      ├─→ System Description (creates technical specs)                          │
+│      ├─→ BOM Generator (equipment list)                                       │
+│      ├─→ Proposal Generator (component counts)                                │
+│      ├─→ Process Flow AI (understands architecture)                           │
+│      └─→ Consistency Audit (validates quality)                                │
+│      ↓                                                                         │
+│   Proposal Documents                                                           │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ FILE LOCATIONS ────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  Tool Scripts:                                                                 │
+│    • print_dxf_info.py          Main extraction tool                          │
+│    • extract_dxf.bat            Windows batch helper                          │
+│                                                                                  │
+│  Documentation:                                                                │
+│    • DXF_EXTRACTION_USAGE.md    Complete usage guide                          │
+│    • DXF_EXTRACTION_GUIDE.md    Technical details                             │
+│    • QUICK_REFERENCE.txt        This file                                     │
+│                                                                                  │
+│  Extracted Data:                                                               │
+│    • OUTPUT/DXF Upload/extractions/  All JSON files saved here                 │
+│                                                                                  │
+│  Source Code:                                                                  │
+│    • Supportive_Functions/dxf_extractor.py   Extraction logic                 │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+┌─ COMMON QUESTIONS ──────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  Q: How long does extraction take?                                             │
+│  A: Usually 1-5 seconds depending on DXF file size                            │
+│                                                                                  │
+│  Q: Why some components marked as UNCATEGORIZED?                               │
+│  A: Components not in the recognition system - these are flagged for review    │
+│                                                                                  │
+│  Q: Can I modify extraction categories?                                        │
+│  A: Edit categorization rules in dxf_extractor.py _categorize_component()     │
+│                                                                                  │
+│  Q: Where is the JSON saved?                                                   │
+│  A: OUTPUT/DXF Upload/extractions/{filename}_extraction.json                  │
+│                                                                                  │
+│  Q: Can I extract multiple files at once?                                      │
+│  A: Use batch processing - see DXF_EXTRACTION_USAGE.md for scripts            │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+Last Updated: February 2026
+For details, see: DXF_EXTRACTION_USAGE.md
