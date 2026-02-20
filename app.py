@@ -9477,7 +9477,7 @@ def add_capacity_section_to_doc(
 
 # Initialize page state
 if "page" not in st.session_state:
-    st.session_state.page = "input"  # "input" or "preview"
+    st.session_state.page = "input"  # "input" or "preview" or "cbs_mapping"
 
 # ==================== PREVIEW PAGE ====================
 if st.session_state.page == "preview" and "generated_pdf_buffer" in st.session_state and st.session_state.generated_pdf_buffer is not None:
@@ -10135,6 +10135,514 @@ if st.session_state.page == "preview" and "generated_pdf_buffer" in st.session_s
             st.session_state.page = "input"
             st.rerun()
 
+# ==================== CBS COMPONENT MAPPING PAGE ====================
+elif st.session_state.page == "cbs_mapping":
+    # Professional header for CBS mapping page
+    st.markdown("""
+    <style>
+        .mapping-header {
+            background: linear-gradient(135deg, #1a1f36 0%, #2d3748 100%);
+            padding: 1.5rem 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            border-left: 4px solid #3182ce;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .mapping-header h2 {
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+        .mapping-header .subtitle {
+            color: #cbd5e0;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            font-weight: 400;
+        }
+        /* Clean table styling */
+        .component-table-header {
+            background: #f7fafc;
+            padding: 0.75rem 0;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        /* Professional button styling */
+        div[data-testid="stButton"] button {
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        div[data-testid="stButton"] button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        /* Clean dividers */
+        hr {
+            margin: 1rem 0;
+            border: none;
+            border-top: 1px solid #e2e8f0;
+        }
+        /* Info text styling */
+        .info-text {
+            color: #718096;
+            font-size: 0.875rem;
+            padding: 0.5rem 0;
+        }
+        /* Search input styling */
+        div[data-testid="stTextInput"] input {
+            border-radius: 6px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Header
+    st.markdown("""
+    <div class="mapping-header">
+        <h2>CBS Component Mapping</h2>
+        <div class="subtitle">Manage mechanical name to actual name mappings for DXF component extraction</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Back button (clean, professional style)
+    if st.button("← Back to Proposal Form", use_container_width=False):
+        st.session_state.page = "input"
+        st.rerun()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # CBS Component Mapping functionality (adapted from ST_Component_map.py)
+    # Use absolute paths based on app.py directory
+    APP_DIR = Path(__file__).parent
+    DEFAULT_EXCEL_PATH = APP_DIR / "CBS_Component_Mapping_WITH_DESCRIPTION.xlsx"
+    SHEET_NAME = "CBS Component Map"
+    IMAGE_DIR = APP_DIR / "Component Image"
+    ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+    THUMB_WIDTH = 150
+    
+    # Backend column names
+    COL_MECH = "Mechanical Name"
+    COL_ACTUAL = "Actual Name"
+    COL_SECTION = "Section"
+    COL_DESC = "description"
+    
+    def _norm(s: str) -> str:
+        return re.sub(r"\s+", " ", str(s or "").strip())
+    
+    def ensure_dirs():
+        IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    def load_excel_bytes_to_disk(file_bytes: bytes, target_path: Path):
+        target_path.write_bytes(file_bytes)
+    
+    def read_components(excel_path: Path) -> pd.DataFrame:
+        xls = pd.ExcelFile(excel_path)
+        sheet = SHEET_NAME if SHEET_NAME in xls.sheet_names else xls.sheet_names[0]
+        raw = pd.read_excel(excel_path, sheet_name=sheet)
+        
+        cols = {str(c).strip().lower(): c for c in raw.columns}
+        def pick(name: str) -> str | None:
+            return cols.get(name.strip().lower())
+        
+        mech = pick(COL_MECH)
+        actl = pick(COL_ACTUAL)
+        sect = pick(COL_SECTION)
+        desc = pick(COL_DESC) or pick("Description") or pick("description")
+        
+        missing = [n for n, v in [(COL_MECH, mech), (COL_ACTUAL, actl), (COL_SECTION, sect)] if v is None]
+        if missing:
+            raise ValueError(f"Missing required column(s): {', '.join(missing)}")
+        
+        df = pd.DataFrame({
+            "Component_Code": raw[mech].fillna("").astype(str).map(_norm),
+            "Component_name": raw[actl].fillna("").astype(str).map(_norm),
+            "Section": raw[sect].fillna("").astype(str).map(_norm),
+            "Description": (raw[desc].fillna("").astype(str).map(_norm) if desc else "")
+        })
+        
+        df["Description"] = df["Description"].astype(str).str.slice(0, 250)
+        return df
+    
+    def write_components(excel_path: Path, df: pd.DataFrame):
+        out = pd.DataFrame({
+            COL_MECH: df["Component_Code"].fillna("").astype(str).map(_norm),
+            COL_ACTUAL: df["Component_name"].fillna("").astype(str).map(_norm),
+            COL_SECTION: df["Section"].fillna("").astype(str).map(_norm),
+            COL_DESC: df["Description"].fillna("").astype(str).map(_norm).str.slice(0, 250),
+        })
+        
+        with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+            out.to_excel(writer, sheet_name=SHEET_NAME, index=False)
+    
+    def excel_bytes_for_download(df: pd.DataFrame) -> bytes:
+        buffer = io.BytesIO()
+        out = pd.DataFrame({
+            COL_MECH: df["Component_Code"].fillna("").astype(str).map(_norm),
+            COL_ACTUAL: df["Component_name"].fillna("").astype(str).map(_norm),
+            COL_SECTION: df["Section"].fillna("").astype(str).map(_norm),
+            COL_DESC: df["Description"].fillna("").astype(str).map(_norm).str.slice(0, 250),
+        })
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            out.to_excel(writer, sheet_name=SHEET_NAME, index=False)
+        buffer.seek(0)
+        return buffer.getvalue()
+    
+    def find_image_for_code(code: str) -> Path | None:
+        code = _norm(code)
+        if not code or not IMAGE_DIR.exists():
+            return None
+        
+        for ext in ALLOWED_IMAGE_EXTS:
+            for variant in (ext, ext.upper()):
+                p = IMAGE_DIR / f"{code}{variant}"
+                if p.exists() and p.is_file():
+                    return p
+        
+        for p in IMAGE_DIR.iterdir():
+            if p.is_file() and p.stem == code and p.suffix.lower() in ALLOWED_IMAGE_EXTS:
+                return p
+        
+        return None
+    
+    def find_image_for_name(name: str) -> Path | None:
+        """Find image by component name instead of code - with fuzzy matching"""
+        name = _norm(name)
+        if not name or not IMAGE_DIR.exists():
+            return None
+        
+        name_lower = name.lower()
+        
+        # Exact match (case-insensitive)
+        for ext in ALLOWED_IMAGE_EXTS:
+            for variant in (ext, ext.upper()):
+                p = IMAGE_DIR / f"{name}{variant}"
+                if p.exists() and p.is_file():
+                    return p
+        
+        # Check all files for stem match
+        try:
+            for p in IMAGE_DIR.iterdir():
+                if p.is_file() and p.suffix.lower() in ALLOWED_IMAGE_EXTS:
+                    stem_lower = p.stem.lower()
+                    
+                    # Exact stem match
+                    if stem_lower == name_lower:
+                        return p
+                    
+                    # Fuzzy match: try singular/plural variations
+                    # Remove trailing 's' for plural matching
+                    if stem_lower.endswith('s') and stem_lower[:-1] == name_lower:
+                        return p
+                    if name_lower.endswith('s') and name_lower[:-1] == stem_lower:
+                        return p
+                    
+                    # Match if one contains the other (for partial matches)
+                    # e.g., "mini gravity chute" matches "mini gravity chutes"
+                    if len(name_lower) > 8 and len(stem_lower) > 8:
+                        # Get base without plural
+                        name_base = name_lower.rstrip('s')
+                        stem_base = stem_lower.rstrip('s')
+                        if name_base == stem_base:
+                            return p
+        except:
+            pass
+        
+        return None
+    
+    def save_uploaded_image(component_code: str, uploaded_file):
+        if uploaded_file is None:
+            return
+        
+        code = _norm(component_code)
+        if not code:
+            raise ValueError("Component Name is required to save image.")
+        
+        ext = Path(uploaded_file.name).suffix.lower()
+        if ext not in ALLOWED_IMAGE_EXTS:
+            raise ValueError(f"Unsupported image type: {ext}")
+        
+        ensure_dirs()
+        
+        for p in IMAGE_DIR.iterdir():
+            if p.is_file() and p.stem == code and p.suffix.lower() in ALLOWED_IMAGE_EXTS:
+                try:
+                    p.unlink()
+                except:
+                    pass
+        
+        (IMAGE_DIR / f"{code}{ext}").write_bytes(uploaded_file.getvalue())
+    
+    ensure_dirs()
+    
+    # File uploader for Excel
+    uploaded = st.file_uploader("Upload Excel (optional)", type=["xlsx", "xls"], key="cbs_mapping_excel_upload")
+    
+    if "cbs_excel_path" not in st.session_state:
+        st.session_state.cbs_excel_path = DEFAULT_EXCEL_PATH
+    
+    if uploaded is not None:
+        load_excel_bytes_to_disk(uploaded.getvalue(), DEFAULT_EXCEL_PATH)
+        st.session_state.cbs_excel_path = DEFAULT_EXCEL_PATH
+        st.session_state.reload_cbs_df = True
+    
+    if "cbs_df" not in st.session_state or st.session_state.get("reload_cbs_df") is True:
+        if not st.session_state.cbs_excel_path.exists():
+            st.warning(f"Place `{DEFAULT_EXCEL_PATH.name}` next to `app.py` or upload it above.")
+            st.stop()
+        
+        try:
+            st.session_state.cbs_df = read_components(st.session_state.cbs_excel_path)
+            st.session_state.reload_cbs_df = False
+        except Exception as e:
+            st.error(f"Failed to load Excel: {e}")
+            st.stop()
+    
+    df = st.session_state.cbs_df
+    
+    @st.dialog("Image Preview")
+    def image_preview_dialog():
+        p = st.session_state.get("preview_path", None)
+        if not p:
+            st.info("No image selected.")
+            return
+        st.image(p, use_container_width=True)
+    
+    @st.dialog("Add Component")
+    def add_component_dialog():
+        sections = sorted(set([s for s in df["Section"].dropna().tolist() if _norm(s)] + ["Infeed System", "Induct", "CBS", "Output Chutes"]))
+        
+        code = st.text_input("Component_Code (Mechanical Name) *")
+        name = st.text_input("Component_name (Actual Name) *")
+        section = st.selectbox("Section *", options=sections)
+        desc = st.text_area("Description (max 250 chars)", height=100)
+        img = st.file_uploader("Upload Image (saved as Component Image/<Component_Name>.<ext>)", type=["png", "jpg", "jpeg", "webp"], key="add_comp_img_upload")
+        
+        a, b = st.columns(2)
+        with a:
+            if st.button("Cancel", use_container_width=True):
+                st.rerun()
+        with b:
+            if st.button("Add", type="primary", use_container_width=True):
+                code_n, name_n, section_n = _norm(code), _norm(name), _norm(section)
+                desc_n = _norm(desc)[:250]
+                
+                if not code_n or not name_n or not section_n:
+                    st.error("Component_Code, Component_name, and Section are required.")
+                    st.stop()
+                
+                if (df["Component_Code"].str.lower() == code_n.lower()).any():
+                    st.error("Component_Code already exists.")
+                    st.stop()
+                
+                if img is not None:
+                    save_uploaded_image(name_n, img)
+                
+                new_row = pd.DataFrame([{
+                    "Component_Code": code_n,
+                    "Component_name": name_n,
+                    "Section": section_n,
+                    "Description": desc_n
+                }])
+                
+                st.session_state.cbs_df = pd.concat([df, new_row], ignore_index=True)
+                write_components(st.session_state.cbs_excel_path, st.session_state.cbs_df)
+                
+                st.session_state.reload_cbs_df = True
+                st.rerun()
+    
+    @st.dialog("Edit Component")
+    def edit_component_dialog():
+        idx = st.session_state.get("edit_idx", None)
+        if idx is None or idx < 0 or idx >= len(st.session_state.cbs_df):
+            st.error("Invalid selection.")
+            st.stop()
+        
+        row = st.session_state.cbs_df.iloc[idx]
+        old_name = row["Component_name"]
+        
+        sections = sorted(set([s for s in st.session_state.cbs_df["Section"].dropna().tolist() if _norm(s)] + ["Infeed System", "Induct", "CBS", "Output Chutes"]))
+        
+        code = st.text_input("Component_Code (Mechanical Name) *", value=row["Component_Code"])
+        name = st.text_input("Component_name (Actual Name) *", value=row["Component_name"])
+        section = st.selectbox("Section *", options=sections, index=sections.index(row["Section"]) if row["Section"] in sections else 0)
+        desc = st.text_area("Description (max 250 chars)", value=row["Description"], height=100)
+        
+        cur_img = find_image_for_name(old_name)
+        if cur_img:
+            st.image(str(cur_img), width=220, caption=f"Current: {cur_img.name}")
+        else:
+            st.info("No image found for this component.")
+        
+        img = st.file_uploader("Upload / Replace Image", type=["png", "jpg", "jpeg", "webp"], key="edit_comp_img_upload")
+        
+        a, b = st.columns(2)
+        with a:
+            if st.button("Cancel", use_container_width=True):
+                st.rerun()
+        with b:
+            if st.button("Save", type="primary", use_container_width=True):
+                code_n, name_n, section_n = _norm(code), _norm(name), _norm(section)
+                desc_n = _norm(desc)[:250]
+                
+                if not code_n or not name_n or not section_n:
+                    st.error("Component_Code, Component_name, and Section are required.")
+                    st.stop()
+                
+                if code_n.lower() != _norm(row["Component_Code"]).lower():
+                    if (st.session_state.cbs_df["Component_Code"].str.lower() == code_n.lower()).any():
+                        st.error("New Component_Code already exists.")
+                        st.stop()
+                
+                # Rename existing image if component name changed
+                if name_n.lower() != _norm(old_name).lower():
+                    old_img = find_image_for_name(old_name)
+                    if old_img:
+                        old_img.rename(IMAGE_DIR / f"{name_n}{old_img.suffix.lower()}")
+                
+                if img is not None:
+                    save_uploaded_image(name_n, img)
+                
+                st.session_state.cbs_df.at[idx, "Component_Code"] = code_n
+                st.session_state.cbs_df.at[idx, "Component_name"] = name_n
+                st.session_state.cbs_df.at[idx, "Section"] = section_n
+                st.session_state.cbs_df.at[idx, "Description"] = desc_n
+                
+                write_components(st.session_state.cbs_excel_path, st.session_state.cbs_df)
+                st.session_state.reload_cbs_df = True
+                st.rerun()
+    
+    # Top bar
+    st.markdown("<br>", unsafe_allow_html=True)
+    t1, t2, t3 = st.columns([1.2, 3.5, 1.3])
+    with t1:
+        if st.button("Add Component", type="primary", use_container_width=True):
+            add_component_dialog()
+    with t2:
+        search = st.text_input("Search", value="", placeholder="Search by code, name, or section...", key="cbs_search", label_visibility="collapsed")
+    with t3:
+        st.download_button(
+            "Download Excel",
+            data=excel_bytes_for_download(df),
+            file_name="CBS_Component_Mapping_UPDATED.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+    
+    st.markdown(f"<div class='info-text'>Component images stored in: <code>{IMAGE_DIR}</code> • Total components: <strong>{len(df)}</strong></div>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    
+    # Debug section with path information
+    with st.expander("🔍 Image Matching Diagnostics", expanded=False):
+        st.caption("Check if component names match image filenames")
+        
+        # Show paths being used
+        st.info(f"**Paths:**\n- App Dir: `{APP_DIR}`\n- Image Dir: `{IMAGE_DIR}`\n- Exists: {IMAGE_DIR.exists()}")
+        
+        # Get available images
+        available_images = {}
+        if IMAGE_DIR.exists():
+            try:
+                for p in IMAGE_DIR.iterdir():
+                    if p.is_file() and p.suffix.lower() in ALLOWED_IMAGE_EXTS:
+                        available_images[_norm(p.stem).lower()] = p.name
+            except Exception as e:
+                st.error(f"Error reading image directory: {e}")
+        
+        st.write(f"**Available images in {IMAGE_DIR.name}:** {len(available_images)}")
+        if available_images:
+            for stem, filename in sorted(available_images.items()):
+                st.text(f"  • {filename}")
+        else:
+            st.warning("No images found in Component Image folder")
+        
+        # Check for matches
+        matched = []
+        unmatched = []
+        for _, row in df.iterrows():
+            name = _norm(row["Component_name"]).lower()
+            if name in available_images:
+                matched.append((row["Component_name"], available_images[name]))
+            else:
+                unmatched.append(row["Component_name"])
+        
+        st.write(f"**Matched components:** {len(matched)} of {len(df)}")
+        if matched:
+            for comp_name, img_name in matched[:10]:
+                st.success(f"✓ {comp_name} → {img_name}")
+        
+        if len(unmatched) > 0:
+            st.warning(f"**Unmatched components:** {len(unmatched)}")
+            st.caption("First 10 unmatched component names (no image found):")
+            for name in unmatched[:10]:
+                st.text(f"  • {name}")
+    
+    # Filter
+    if search.strip():
+        s = search.strip().lower()
+        view = df[
+            df["Component_Code"].str.lower().str.contains(s, na=False) |
+            df["Component_name"].str.lower().str.contains(s, na=False) |
+            df["Section"].str.lower().str.contains(s, na=False)
+        ].copy()
+    else:
+        view = df.copy()
+    
+    # Display count
+    if search.strip():
+        st.markdown(f"<div class='info-text'>Showing <strong>{len(view)}</strong> of <strong>{len(df)}</strong> components</div>", unsafe_allow_html=True)
+    
+    # Header
+    hdr = st.columns([2.5, 2.5, 1.5, 3.5, 1.5, 0.5, 0.5])
+    hdr[0].markdown("**Component Code**")
+    hdr[1].markdown("**Component Name**")
+    hdr[2].markdown("**Section**")
+    hdr[3].markdown("**Description**")
+    hdr[4].markdown("**Image**")
+    hdr[5].markdown("")
+    hdr[6].markdown("")
+    
+    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
+    
+    # Rows
+    if len(view) == 0:
+        st.info("No components found. Try adjusting your search or add a new component.")
+    else:
+        for _, r in view.reset_index().iterrows():
+            idx = int(r["index"])
+            code = r["Component_Code"]
+            
+            cols = st.columns([2.5, 2.5, 1.5, 3.5, 1.5, 0.5, 0.5])
+            
+            cols[0].markdown(f"<div style='padding: 0.5rem 0; color: #2d3748;'>{r['Component_Code']}</div>", unsafe_allow_html=True)
+            cols[1].markdown(f"<div style='padding: 0.5rem 0; color: #2d3748;'>{r['Component_name']}</div>", unsafe_allow_html=True)
+            cols[2].markdown(f"<div style='padding: 0.5rem 0;'><span style='background: #edf2f7; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; color: #4a5568;'>{r['Section']}</span></div>", unsafe_allow_html=True)
+            cols[3].markdown(f"<div style='padding: 0.5rem 0; color: #718096; font-size: 0.9rem;'>{r['Description'][:100]}{'...' if len(r['Description']) > 100 else ''}</div>", unsafe_allow_html=True)
+            
+            # Fixed: Pass Component_name instead of code
+            component_name = r['Component_name']
+            img_path = find_image_for_name(component_name)
+            if img_path:
+                try:
+                    cols[4].image(str(img_path), width=THUMB_WIDTH)
+                except Exception as e:
+                    cols[4].warning(f"Error loading image: {e}")
+            else:
+                cols[4].markdown("<div style='padding: 0.5rem 0; color: #cbd5e0; font-size: 0.85rem;'>No image</div>", unsafe_allow_html=True)
+            
+            if cols[5].button("✏️", key=f"edit_{idx}", help="Edit component"):
+                st.session_state.edit_idx = idx
+                edit_component_dialog()
+            
+            if cols[6].button("🗑️", key=f"del_{idx}", help="Delete component"):
+                st.session_state.cbs_df = st.session_state.cbs_df.drop(index=idx).reset_index(drop=True)
+                write_components(st.session_state.cbs_excel_path, st.session_state.cbs_df)
+                st.session_state.reload_cbs_df = True
+                st.rerun()
+            
+            st.markdown("<hr style='margin: 0.5rem 0; border-top: 1px solid #f0f0f0;'>", unsafe_allow_html=True)
+
 # ==================== INPUT PAGE ====================
 else:
     st.session_state.page = "input"
@@ -10365,6 +10873,18 @@ else:
             capacity_excel = st.file_uploader("Throughput Calculation Sheet *", type=["xlsx", "xls"], key="capacity_upload", help="Capacity calculation workbook")
             prog_gantt = st.file_uploader("Project Timeline Chart (optional)", type=["png", "jpg", "jpeg"], key="gantt_upload", help="Gantt chart or timeline image")
 
+        st.markdown("<hr style='margin: 1rem 0; border: none; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+        
+        # ---- CBS Component Mapping Button ----
+        st.markdown("##### Component Management")
+        cbs_map_col1, cbs_map_col2 = st.columns([1, 3])
+        with cbs_map_col1:
+            if st.button("CBS Component Mapping", use_container_width=True, help="Manage CBS component mappings", type="secondary"):
+                st.session_state.page = "cbs_mapping"
+                st.rerun()
+        with cbs_map_col2:
+            st.caption("Configure mechanical name to actual name mappings for DXF component extraction")
+        
         st.markdown("<hr style='margin: 1rem 0; border: none; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
         
         # ---- Section: Optional Layout Image ----
