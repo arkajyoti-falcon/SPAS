@@ -10400,6 +10400,35 @@ elif st.session_state.page == "cbs_mapping":
             st.stop()
     
     df = st.session_state.cbs_df
+
+    # Auto-add unmapped DXF component codes to the mapping sheet
+    extracted_components = st.session_state.get("extracted_components_mapped", [])
+    last_dxf_name = st.session_state.get("last_dxf_name")
+    if extracted_components and last_dxf_name:
+        last_sync_dxf = st.session_state.get("unmapped_sync_last_dxf")
+        if last_sync_dxf != last_dxf_name:
+            unmapped_codes = sorted({
+                _norm(c.get("dxf_name", ""))
+                for c in extracted_components
+                if c.get("status") == "UNMAPPED" and _norm(c.get("dxf_name", ""))
+            })
+            if unmapped_codes:
+                existing_codes = set(df["Component_Code"].str.strip().str.lower())
+                new_rows = []
+                for code in unmapped_codes:
+                    if code.lower() in existing_codes:
+                        continue
+                    new_rows.append({
+                        "Component_Code": code,
+                        "Component_name": "",
+                        "Section": "Unmapped",
+                        "Description": "Auto-added from DXF (unmapped)"
+                    })
+                if new_rows:
+                    st.session_state.cbs_df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+                    write_components(st.session_state.cbs_excel_path, st.session_state.cbs_df)
+                    df = st.session_state.cbs_df
+            st.session_state.unmapped_sync_last_dxf = last_dxf_name
     
     @st.dialog("Image Preview")
     def image_preview_dialog():
@@ -10531,6 +10560,14 @@ elif st.session_state.page == "cbs_mapping":
         )
     
     st.markdown(f"<div class='info-text'>Component images stored in: <code>{IMAGE_DIR}</code> • Total components: <strong>{len(df)}</strong></div>", unsafe_allow_html=True)
+
+    if extracted_components:
+        mapped_count = sum(1 for c in extracted_components if c.get("status") in ("MAPPED", "AI_MAPPED"))
+        unmapped_count = sum(1 for c in extracted_components if c.get("status") == "UNMAPPED")
+        st.markdown(
+            f"<div class='info-text'>DXF summary: Mapped <strong>{mapped_count}</strong> • Unmapped <strong>{unmapped_count}</strong></div>",
+            unsafe_allow_html=True
+        )
     st.markdown("<hr>", unsafe_allow_html=True)
     
     # Debug section with path information
