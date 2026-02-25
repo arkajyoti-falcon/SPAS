@@ -1526,6 +1526,50 @@ def show_merged_components_dialog(
         "🏗️ DXF Components (EZDXF + CBS + AI)",
         "✅ Merged Final List"
     ])
+
+    dxf_grouped = _group_components_by_section(dxf_components)
+    costing_success = bool(costing_sheet_data and costing_sheet_data.get("success"))
+
+    def _make_costing_component(name: str, count: int, section: str) -> Dict:
+        return {
+            "proposal_name": name,
+            "count": count,
+            "section": section,
+            "status": "COSTING",
+            "dxf_name": ""
+        }
+
+    def _build_costing_grouped_components(data: Dict) -> Dict:
+        grouped = defaultdict(list)
+        if not data or not data.get("success"):
+            return grouped
+
+        for comp in data.get("induct", []):
+            name = comp.get("component")
+            count = int(comp.get("count", 0) or 0)
+            if name:
+                grouped["Induct System"].append(_make_costing_component(name, count, "Induct System"))
+
+        for chute in data.get("output_chutes", []):
+            name = chute.get("type")
+            count = int(chute.get("count", 0) or 0)
+            if name:
+                grouped["Output Chutes"].append(_make_costing_component(name, count, "Output Chutes"))
+
+        main_loop_type = data.get("main_loop", {}).get("type")
+        if main_loop_type and main_loop_type != "unknown":
+            grouped["Loop CBS"].append(_make_costing_component(main_loop_type, 1, "Loop CBS"))
+
+        return grouped
+
+    costing_grouped = _build_costing_grouped_components(costing_sheet_data)
+
+    def _merged_components_for_section(section_name: str) -> List[Dict]:
+        if section_name in ["Induct System", "Output Chutes", "Loop CBS"]:
+            if costing_success:
+                return costing_grouped.get(section_name, [])
+            return dxf_grouped.get(section_name, [])
+        return dxf_grouped.get(section_name, [])
     
     # TAB 1: Costing Sheet Components
     with tab1:
@@ -1573,7 +1617,7 @@ def show_merged_components_dialog(
                 st.metric("Unique Components", len(dxf_components))
         
         # Show DXF components by section
-        grouped = _group_components_by_section(dxf_components)
+        grouped = dxf_grouped
         
         for section_name, components in grouped.items():
             if components:
@@ -1599,13 +1643,16 @@ def show_merged_components_dialog(
             "Others": "Others"
         }
         
-        grouped_components = _group_components_by_section(dxf_components)
+        merged_grouped = {
+            section_name: _merged_components_for_section(section_name)
+            for section_name in section_display_map.values()
+        }
         
         # Initialize session state for all sections upfront
         for real_section_name in section_display_map.values():
             if real_section_name == "Induct System":
                 if "components_induct_parcel" not in st.session_state or "components_induct_bag" not in st.session_state:
-                    initial_components = grouped_components.get("Induct System", [])
+                    initial_components = merged_grouped.get("Induct System", [])
                     parcel_comps, bag_comps, detected_type = classify_induct_components(initial_components)
                     if "components_induct_parcel" not in st.session_state:
                         st.session_state.components_induct_parcel = [c.copy() for c in parcel_comps]
@@ -1616,12 +1663,12 @@ def show_merged_components_dialog(
             else:
                 session_key = f"components_{real_section_name.lower().replace(' ', '_')}"
                 if session_key not in st.session_state:
-                    initial_components = grouped_components.get(real_section_name, [])
+                    initial_components = merged_grouped.get(real_section_name, [])
                     st.session_state[session_key] = [comp.copy() for comp in initial_components]
         
         # Render each section with an expander
         for display_name, real_section_name in section_display_map.items():
-            section_components = grouped_components.get(real_section_name, [])
+            section_components = merged_grouped.get(real_section_name, [])
             
             if display_name == "Induct System":
                 induct_type_sel = st.session_state.get("induct_type_selection", "Both")

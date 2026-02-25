@@ -772,6 +772,12 @@ def generate_initial_flow(client_name: str, dxf_json: dict) -> str:
     logger.info(f"Generating initial process flow for client: {client_name}")
     
     dxf_summary = create_dxf_summary(dxf_json)
+    manual_components_summary = dxf_json.get("components_summary", "")
+    manual_sections = dxf_json.get("sections_included", [])
+    if manual_sections:
+        manual_sections_text = ", ".join(manual_sections)
+    else:
+        manual_sections_text = ""
     
     # Get CBS knowledge and use it in the prompt
     logger.info("Fetching CBS knowledge...")
@@ -829,128 +835,6 @@ Output Chutes: 51 chutes
 ---
 **ABOUT CROSS BELT SORTERS (CBS):** {cbs_knowledge_text}
 ---
-**Components name mapping**
-Sci_fi_name,Actual_component_name
-3k Dap Feedline,Feedline conveyor (3.0 m section)
-ANGLE_MERGE_2000PPH,Angle merge conveyor (rated ~2000 pph)
-ATR Vipacsystem +,Barcode scanning system (ATR / VIPAC)
-Assem2,Assembly block (misc. mechanical assembly) [needs confirmation]
-Auto Induct Chute-02,Auto-induct chute (variant 02)
-Auto Induct Chute-03,Auto-induct chute (variant 03)
-Bag Transfer Chute,Bag transfer chute
-CBS_PTL_XREF(26-10)$0$A$Ca681773c,XREF block (CAD artifact / unknown)
-CBS_PTL_XREF(26-10)$0$Dual Belt CBS 45 Deg Turn (FAL_S005V01),CBS sorter 45° turn module (dual belt) [XREF]
-CBS_PTL_XREF(26-10)$0$Dual Belt CBS 45 Deg Turn(Track),CBS turn track segment [XREF]
-CBS_PTL_XREF(26-10)$0$FAL_FS002V02,Falcon feedline/auto-induct module (FS002 V02) [XREF]
-CBS_PTL_XREF(26-10)$0$Operator,Operator marker [XREF]
-CBS_PTL_XREF(26-10)$0$PTL Chute-01(DD),PTL chute / station chute (double-deck) [XREF]
-CHUTE TYPE-02,Chute type definition block
-Chute,Generic chute (collection/slide chute)
-Chute-001,Generic chute block
-Chute-002,Generic chute block
-Chute-01,Generic chute block
-Chutes$0$Mini gravity 01,Mini gravity chute (small gravity chute)
-Collection Bin (FAL_ST001V01),Collection bin / tote
-Collection Chute for Double Deck Straight,Collection chute (double deck straight)
-Container,Container / skid box symbol
-Container1,Container / skid box symbol
-Conveyor 1,Generic conveyor segment
-Conveyor 10,Generic conveyor segment
-Customize Leg,Custom support leg
-Crossover for Maintanance,Maintenance crossover / bridge
-Direct Bagging Chute 900 mm pitch,Direct bagging chute (900 mm pitch)
-Disperson Chute-01,Dispersion chute
-Diverter-01,Diverter unit
-Double Deck Loop Stairs,Stairs (double deck loop access)
-Dual Belt CBS 45 Deg Turn (FAL_S005V01),CBS sorter 45° turn module (dual belt)
-Dual Belt CBS 45 Deg Turn (FAL_S005V01)_003,CBS sorter 45° turn module (dual belt) - instance
-Dual Belt CBS 45 Deg Turn (FAL_S005V02),CBS sorter 45° turn module (dual belt) - rev V02
-End joint individual,End joint / connector piece
-FAL_BLK_Boom Conveyor,Boom conveyor (boom/incline belt conveyor section)
-FAL_BLK_Boom Conveyor (6-18),Boom conveyor (boom/incline belt conveyor section)
-FAL_BLK_Feed lineW1000 @30°,Inclined feedline belt conveyor (1000 mm wide, 30°)
-FAL_BLK_P&A,Positioning & alignment unit (P&A) / aligner module
-FAL_BT30°_W1200,Belt turn/transfer module (30°, 1200 mm width)
-FAL_BT60°_W1200,Belt turn/transfer module (60°, 1200 mm width)
-FAL_BT90°_W1200,Belt turn/transfer module (90°, 1200 mm width)
-FAL_DET_BLK_Pallet,Pallet block / pallet position marker
-FAL_FS002V02,Falcon feedline/auto-induct module (FS002 V02)
-FAL_FS002V02 1000mmW,Falcon feedline/auto-induct module (FS002 V02, 1000 mm width)
-FAL_FS002V02(Without weighing),Falcon feedline/auto-induct module without weighing
-FAL_FS003V01,Falcon feedline/auto-induct module (FS003 V01)
-FAL_PMC6V01(1000mm_90_deg),Powered merge/curve conveyor (90°, 1000 mm)
-FAL_PMC9V01(1000mm_30_deg),Powered merge/curve conveyor (30°, 1000 mm)
-FAL_PRC4V01(30Deg_Turn),Powered roller curve (30°)
-FAL_PRC6V01(60Deg_Turn),Powered roller curve (60°)
-FAL_PRC7V01(90Deg_Turn),Powered roller curve (90°)
-FAL_RT90°_W500,Roller transfer / roller turn (90°, 500 mm width)
-FAL_S013V01 (VDS Arm),VDS arm / transfer mechanism
-FAl_BLK_Boom Conveyors,Boom conveyor (boom/incline belt conveyor section)
-Feedline 1,Feedline conveyor (manual/auto induct)
-Feedline_2.4k,Feedline conveyor (2.4 m section)
-FeedLineTransferPlate,Feedline transfer plate
-FeedLineTransferPlate with 600 mm,Feedline transfer plate (600 mm)
-Fencing01,Safety fencing / guardrail
-Fencing03,Safety fencing / guardrail
-INSIDE_LEFT_DOR_FENSIG_STEP_ASM,Fencing step assembly (inside left door)
-IRChute-02,Irregular chute (IR) 02
-Inching_Mode_Asm,Inching mode assembly (maintenance control)
-Irregular Chutes re Shift,Irregular chutes (re-shift)
-Irregular chute with 30 Deg angle,Irregular chute (30°)
-L-type Chute(Bagging),L-type bagging chute
-L-type Chute-02,L-type chute (variant)
-L-Type Chute (FAL_C004V01)1,L-type chute (Falcon C004)
-Leg Guard-01,Leg guard / safety guard
-Live Chute Connected with TBC,Live chute connected to TBC
-Lower Deck Live Dock Transfer Plate,Lower deck live dock transfer plate
-Mezz.,Mezzanine level annotation / marker
-MLG_UNIT,Safety sensor / light curtain unit (MLG) [needs confirmation]
-Operator,Operator workstation / man marker
-Operator Safety Gaurd,Operator safety guard / railing
-Output Chute-1,Output chute
-PC01_00,Control panel / PLC cabinet symbol (PC01) [needs confirmation]
-PTL Chute-01(DD),PTL chute / station chute (double-deck)
-PTL frame,PTL frame / rack structure
-PTL lights & pallets setup 3 Nos,PTL lights + pallet setup
-PTL4x3+3x3,PTL rack (4x3 + 3x3)
-pallet,Pallet (load unit)
-Powered Roller Table,Powered roller table
-Ptl racks 4x3 and 4x3,PTL rack (4x3 configuration)
-roller cage 1000 x 1200,Roller cage trolley (1000 x 1200)
-Side Barcode Scanning System,Side barcode scanning system
-Singulator,Singulator (bulk-to-singulated)
-Spiral Chute Double Decker,Spiral chute (double deck)
-Spiral Chute Type -D,Spiral chute (Type D)
-Stairs at Highnangle,Stairs / access ladder
-Static_Buffer Conveyor (FAL_F001V01)_2,Static buffer/spacing conveyor
-Static_IFU Conveyor ( FAL_F006V01)_1,Static IFU conveyor (induct/interface unit)
-Static_IFU Conveyor (FAL_F011V02)_01,Static IFU conveyor (rev F011 V02)
-Static_Infeed Or Orientation Conveyor,Infeed/orientation conveyor
-Static_Intelligent Merge 30 Deg (FAL_F007V01)_1,Static intelligent merge conveyor (30°)
-Static_Intelligent Merge 30 Deg (FAL_F012V02)_01,Static intelligent merge conveyor (30°, rev F012 V02)
-Static_Intelligent Merge 60Deg (FAL_F002V01)_1,Static intelligent merge conveyor (60°)
-Static_Positioning System (FAL_F013V01)_1,Static positioning/alignment system (rev F013 V01)
-Static_Positioning System (FAL_F013V02)_01,Static positioning/alignment system (rev F013 V02)
-Static_Receiving Conveyor (FAL_F003V01)_1,Static receiving conveyor
-Static_Weighing Conveyor (FAL_F015V01)_01,Static weighing conveyor (rev F015 V01)
-Static_Weighing Conveyor (FAL_F015V02)_01,Static weighing conveyor (rev F015 V02)
-Static-Swivel Wheel (Version 01),Swivel wheel transfer / omni-direction transfer
-Support Structure 8,Support structure / frame
-Support Structure for Turn,Support structure for turn module
-TBC,Telescopic belt conveyor
-TBC OB,Telescopic belt conveyor (outbound)
-TBCs,Telescopic belt conveyor
-Telescopico,Telescopic belt conveyor
-Telescopico a nastro_ingresso,Telescopic belt conveyor (infeed)
-Trolley 1000x1000,Trolley / roller cage (1000 x 1000)
-T-type Chute(Bagging),T-type bagging chute
-VAN,Van / vehicle symbol
-VDS Chute (T2242),VDS chute (buffer loop discharge) - Type T2242
-overweight,Overweight/exception chute or lane
-over weight and dim chute for 3700 mm height,Overweight + dimensioning exception chute (3700 mm height)
-over weight and size chute for 5700 mm,Overweight + oversize exception chute (5700 mm)
-XREF_Bag & Semilarge Sorter_Rev-05,External reference (XREF) for bag & semilarge sorter drawing
-
 ## 🚨🚨 MANDATORY CLIENT NAME RULE (HIGHEST PRIORITY) 🚨🚨
 
 **YOU MUST USE ONLY THE CLIENT NAME PROVIDED IN THE USER PROMPT.**
@@ -1062,7 +946,7 @@ XREF_Bag & Semilarge Sorter_Rev-05,External reference (XREF) for bag & semilarge
 Process Flow
 Infeed System: - <Description>
 
-Auto Induct Line: <Description>
+Induct : <Description>
 
 Loop CBS: - <Description>
 
@@ -1325,6 +1209,14 @@ VDS PRESENT: {"YES" if dxf_json.get('has_vds', False) else "NO"}
 
 COMPONENTS:
 {dxf_summary}
+"""
+
+    if manual_components_summary:
+        user_prompt += f"""
+
+CONFIRMED COMPONENTS (Merged Final List):
+Sections: {manual_sections_text}
+{manual_components_summary}
 
 IMPORTANT RULES:
 1. NO counts in any section EXCEPT Output Chutes
@@ -1349,6 +1241,11 @@ Output ONLY the process flow text. No notes or explanations."""
     
     cleaned = clean_generated_flow(result)
     logger.info(f"✅ Initial flow generated and cleaned ({len(cleaned)} chars)")
+    print("\n" + "=" * 80)
+    print("INITIAL PROCESS FLOW (RAW)")
+    print("=" * 80)
+    print(cleaned)
+    print("=" * 80 + "\n")
     return cleaned
 
 
