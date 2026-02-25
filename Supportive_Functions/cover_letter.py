@@ -1,6 +1,8 @@
-import os
+﻿import os
+import sys
 from io import BytesIO
 from datetime import date
+from pathlib import Path
 
 import streamlit as st
 from groq import Groq
@@ -13,101 +15,16 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+# Import prompts from main app.py (single source of truth)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from app import COVER_LETTER_SYSTEM_PROMPT, COVER_LETTER_USER_PROMPT_TEMPLATE
+
 load_dotenv()
 
 # ==========================
-# Groq client + prompts
+# Groq client
 # ==========================
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-SYSTEM_PROMPT = """
-You are a seasoned sales professional and proposal writer at Falcon Autotech. Your job is to SELL—not just inform. Write cover letters that make the client WANT to work with Falcon.
-
-## 🎯 SALES MINDSET (CRITICAL)
-- You are NOT just describing what Falcon offers—you are SELLING a partnership
-- Every sentence should answer: "Why should the client choose Falcon?"
-- Focus on CLIENT BENEFITS, not just features
-- Make the client feel understood, valued, and excited
-
-## 🗣️ HUMAN STORYTELLING APPROACH
-The writing style MUST be indistinguishable from natural human writing:
-- Write like an experienced sales professional, NOT an AI
-- Use simple, warm, conversational English—not corporate jargon
-- Vary sentence lengths naturally (mix short punchy with longer flowing)
-- Show genuine enthusiasm and partnership spirit
-- Avoid robotic phrases: "We are pleased to..." "It is our honor..." "We would like to..."
-- Instead use: "We're excited to..." "Your project caught our attention because..." "Here's what makes this special..."
-
-## 💡 WHY + WHAT (Always explain WHY, not just WHAT)
-- DON'T: "Falcon has 20 years of experience"
-- DO: "With 20 years of hands-on experience, we've solved challenges exactly like yours—and we know what works"
-- DON'T: "We offer automation solutions"
-- DO: "Our automation solutions will help you achieve faster turnaround times and reduce manual errors"
-
-Generate a formal techno-commercial COVER LETTER for a proposal. 
-The writing style MUST be indistinguishable from natural human writing. The text should read as if drafted by an experienced professional, not an AI system. Use clear, simple, and natural language with varied sentence lengths and structures. Avoid generic phrases, repetitive patterns, or mechanical tone. Ensure that the output flows smoothly, conveys intent naturally, and would not be detected as machine-generated. The content should feel thoughtful, context-aware, and aligned with how a human proposal writer or business professional would communicate.
-
-MAX COVER LETTER WORDS : 250 WORDS OR 1500 CHARACTER (whatever is minimum)
-
-1. Start with:
-   Kind Attention –
-   Mr. {{executives}}
-   M/s {{client_name}}
-
-   Offer Ref: {{offer_ref}}; Date: {{letter_date}}
-
-   Subject – Techno-Commercial Offer for {{project_title}}  
-
-2. If there is only one executive, address them with:
-   Dear {{first_exec_name}},
-   If multiple executives, skip "Dear" and go directly to the content.
-   Use Mr. for male and Ms. for female executives.
-
-3. Opening paragraph (human way):
-   - Acknowledge the invitation or requirement.
-   - If invitation_date exists, mention it naturally.
-   - If meeting_date exists, reference recent discussions or suggestions.
-   - Wording must change between runs (not fixed sentences).
-
-4. Body (human way):
-   - Highlight Falcon’s analysis, solution evaluation, and technical proposal attachment.
-   - Mention Falcon’s proven intralogistics technologies and experience.
-   - Personalize with client_name.
-   - Optionally mention project planning or timeline.
-
-5. Closing (human way):
-   - Reaffirm sender’s personal commitment.
-   - Encourage the client to reach out for clarifications.
-   - End with "Best Regards," followed by sender_name and sender_title.
-
-Important:
-- Do not exceed word/character limit.
-- Keep tone formal, professional, and client-oriented.
-- Do not copy exact sentences; rephrase wording across generations.
-- The cover letter MUST sound human, natural and professional. It should be clear, authentic, and warm, without feeling robotic or overly formal.
-- DO NOT ADD ANY EXTRA WORD OR INFO APART FROM THE COVER LETTER.
-- Highlight the main system or project name in main body (not subject line) as bold style, use ** for Bold.
-"""
-
-USER_PROMPT_TEMPLATE = """
-Use the following information to generate the cover letter:
-
-client_name: {client_name}
-project_title: {project_title}
-offer_ref: {offer_ref}
-letter_date: {letter_date}
-
-executives (one per line, already with Mr./Ms. prefix):
-{executives_block}
-
-invitation_date: {invitation_date}
-meeting_date: {meeting_date}
-
-sender_name: {sender_name}
-sender_title: {sender_title}
-
-Return ONLY the cover letter text, without markdown code fences or extra commentary.
-"""
 
 
 def call_groq_cover_letter(
@@ -120,8 +37,9 @@ def call_groq_cover_letter(
     meeting_date: str,
     sender_name: str,
     sender_title: str,
+    user_confirmed_components: str = "",
 ) -> str:
-    user_prompt = USER_PROMPT_TEMPLATE.format(
+    user_prompt = COVER_LETTER_USER_PROMPT_TEMPLATE.format(
         client_name=client_name,
         project_title=project_title,
         offer_ref=offer_ref,
@@ -129,6 +47,7 @@ def call_groq_cover_letter(
         executives_block=executives_block.strip() or "Not provided",
         invitation_date=invitation_date.strip() or "Not provided",
         meeting_date=meeting_date.strip() or "Not provided",
+        user_confirmed_components=user_confirmed_components.strip() or "Not provided",
         sender_name=sender_name,
         sender_title=sender_title,
     )
@@ -136,7 +55,7 @@ def call_groq_cover_letter(
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": COVER_LETTER_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.3,
@@ -158,7 +77,7 @@ HEADER_PREFIXES = (
     "Ms.",
     "M/s",
     "Offer Ref:",
-    "Subject –",
+    "Subject â€“",
     "Subject -",
 )
 
@@ -271,7 +190,7 @@ def build_full_docx(
 
     # Proposal reference box
     if offer_ref:
-        add_boxed_text(doc, f"Proposal Reference – {offer_ref}", font_size=14, bold=True)
+        add_boxed_text(doc, f"Proposal Reference â€“ {offer_ref}", font_size=14, bold=True)
 
     # Some vertical spacing
     doc.add_paragraph("")
@@ -287,7 +206,7 @@ def build_full_docx(
         "Falcon Autotech Private Limited",
         "Plot No. 87, Sector Ecotech-1, Extention-1, Greater Noida, Uttar Pradesh 201308.",
         "",
-        f"Contact – {contact_name}",
+        f"Contact â€“ {contact_name}",
         "Assistant Manager",
         f"Mob - {contact_phone}",
         contact_email,
@@ -306,7 +225,7 @@ def build_full_docx(
 
 
 # ========= Streamlit UI =========
-st.set_page_config(page_title="Falcon Cover Letter + Front Page", page_icon="📄")
+st.set_page_config(page_title="Falcon Cover Letter + Front Page", page_icon="ðŸ“„")
 st.title("Techno-Commercial Cover Letter + Front Page Generator")
 
 col1, col2 = st.columns(2)
@@ -358,6 +277,7 @@ if generate:
                 meeting_date=meeting_date,
                 sender_name=sender_name.strip(),
                 sender_title=sender_title.strip(),
+                user_confirmed_components="",  # Use empty string for standalone UI
             )
 
             st.session_state["cover_letter_text"] = letter_text

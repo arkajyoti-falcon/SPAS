@@ -168,18 +168,49 @@ def extract_pdf_text(uploaded_file) -> str:
     return full_text
 
 
-def call_groq_exec_summary(system_text: str, client_name: str, project_title: str) -> str:
-    """Call Groq API to generate the Executive Summary text."""
+def call_groq_exec_summary(
+    system_text: str, 
+    client_name: str, 
+    project_title: str,
+    pph_count: int = None,
+    cbs_type: str = None,
+    dxf_json: dict = None,
+    facts = None,
+    context = None,
+    manual_components_context: dict = None,
+) -> str:
+    """Call Groq API to generate the Executive Summary text.
+    
+    Args:
+        system_text: The proposed system description
+        client_name: Client name
+        project_title: Project name
+        pph_count: Items per hour throughput
+        cbs_type: Type of Cross-Belt Sorter
+        dxf_json: DXF-extracted JSON data
+        facts: ProposalFacts object (legacy)
+        context: ProposalContext object (legacy)
+        manual_components_context: Merged components context from user confirmation
+                                   Contains: configured_components, sections_included, components_summary
+    """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY environment variable is not set.")
 
     client = Groq(api_key=api_key)
 
+    # Build merged components summary if provided
+    merged_components_text = ""
+    if manual_components_context:
+        components_summary = manual_components_context.get("components_summary", "")
+        if components_summary:
+            merged_components_text = f"\n\nConfirmed Components (from user):\n{components_summary}"
+
     user_content = (
         f"Client Name: {client_name}\n"
         f"Project / System Name: {project_title}\n\n"
-        f"Proposed System Description (for context):\n{system_text}\n\n"
+        f"Proposed System Description (for context):\n{system_text}"
+        f"{merged_components_text}\n\n"
         "Generate the Executive Summary strictly as per the instructions."
     )
 

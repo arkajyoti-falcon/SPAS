@@ -149,12 +149,87 @@ def validate_output_chutes_section(flow: str) -> str:
     return ""
 
 
+def _build_manual_output_chutes_list(dxf_json: dict) -> list:
+    """Return output chute components from manual confirmation as list of dicts."""
+    manual_components = dxf_json.get("manual_components", {})
+    section = manual_components.get("output_chutes") if isinstance(manual_components, dict) else None
+    if not section:
+        return []
+    components = section.get("components", [])
+    return components if isinstance(components, list) else []
+
+
+def _build_output_chutes_text_from_manual(dxf_json: dict) -> str:
+    """Build Output Chutes section from user-confirmed components."""
+    components = _build_manual_output_chutes_list(dxf_json)
+    if not components:
+        return ""
+
+    def _describe_chute(name: str, count: int | None, unit: str) -> str:
+        base = name.strip()
+        name_lower = base.lower()
+        count_text = f"{count} {unit}" if count is not None and count != "" else ""
+        if "mini" in name_lower and "gravity" in name_lower:
+            return f"There are {count_text} {base.lower()} in the system with compact accumulation capacity for smaller parcels." if count_text else f"{base} are provided for smaller parcels."
+        if "gravity" in name_lower:
+            return f"There are {count_text} {base.lower()} present to collect sorted parcels with gentle gravity-assisted flow." if count_text else f"{base} collect sorted parcels with gentle gravity-assisted flow."
+        if "dispersion" in name_lower:
+            return f"{count_text} {base.lower()} are provided to spread flow and avoid chute congestion." if count_text else f"{base} are provided to spread flow and avoid chute congestion."
+        if "rejection" in name_lower:
+            return f"{count_text} {base.lower()} handle exception parcels and sort rejects." if count_text else f"{base} handle exception parcels and sort rejects."
+        if "overweight" in name_lower:
+            return f"{count_text} {base.lower()} are allocated for heavy parcels requiring dedicated handling." if count_text else f"{base} are allocated for heavy parcels requiring dedicated handling."
+        if "bulk" in name_lower:
+            return f"{count_text} {base.lower()} is provided for bulk or non-conveyable items and connects to outbound handling." if count_text else f"{base} is provided for bulk or non-conveyable items and connects to outbound handling."
+        if "strand" in name_lower:
+            return f"{count_text} {base.lower()} is planned for controlled parcel discharge to outbound activity." if count_text else f"{base} is planned for controlled parcel discharge to outbound activity."
+        if "generic" in name_lower:
+            return f"A total of {count_text} {base.lower()} collect parcels after sorting." if count_text else f"{base} collect parcels after sorting."
+        return f"There are {count_text} {base.lower()} in the system for sorted parcel collection." if count_text else f"{base} are provided for sorted parcel collection."
+
+    output_lines = ["Output Chutes: - The shipments are discharged into following types of chutes:"]
+    letter = "a"
+    for comp in components:
+        name = str(comp.get("name", "")).strip()
+        if not name:
+            continue
+        count = comp.get("count", None)
+        unit = comp.get("unit", "Nos")
+        description = _describe_chute(name, count, unit)
+        line = f"{letter}. {name} - {description}"
+        output_lines.append(line)
+        letter = chr(ord(letter) + 1)
+
+    return "\n".join(output_lines)
+
+
+def _replace_output_chutes_section(flow: str, new_section: str) -> str:
+    """Replace or append Output Chutes section with new content."""
+    header_match = re.search(r"^\s*(\d+)\.\s*output\s+chutes", flow, re.IGNORECASE | re.MULTILINE)
+    if header_match:
+        number = header_match.group(1)
+        lines = new_section.splitlines()
+        if lines:
+            lines[0] = f"{number}. Output Chutes: - The shipments are discharged into following types of chutes:"
+        new_section = "\n".join(lines)
+
+    pattern = r"(^\s*\d+\.\s*output\s+chutes.*$|^\s*output\s+chutes.*$)([\s\S]*?)(?=^\s*\d+\.\s|\Z)"
+    if re.search(pattern, flow, re.IGNORECASE | re.MULTILINE):
+        return re.sub(pattern, new_section + "\n\n", flow, flags=re.IGNORECASE | re.MULTILINE)
+
+    return flow.rstrip() + "\n\n" + new_section
+
+
 def fix_empty_output_chutes(flow: str, dxf_json: dict, client_name: str) -> str:
     """
     If Output Chutes section is empty, regenerate it with proper content based on DXF analysis.
     Enhanced to include all chute subtypes from DXF with per-zone counts.
     Also adds Bag Takeaway Conveyor section if PTL/Sliding chutes are present.
     """
+    manual_output = _build_output_chutes_text_from_manual(dxf_json)
+    if manual_output:
+        return _replace_output_chutes_section(flow, manual_output)
+
     issue = validate_output_chutes_section(flow)
     if not issue:
         # Check if Bag Takeaway section is missing but needed
@@ -1208,22 +1283,54 @@ INDUCTION: {dxf_json['induction_type']}
 VDS PRESENT: {"YES" if dxf_json.get('has_vds', False) else "NO"}
 
 COMPONENTS:
-{dxf_summary}
 """
 
+    # Use ONLY user-confirmed components if available, otherwise fall back to DXF summary
     if manual_components_summary:
-        user_prompt += f"""
+        output_chutes_components = _build_manual_output_chutes_list(dxf_json)
+        output_chutes_text = ""
+        if output_chutes_components:
+            output_lines = []
+            for comp in output_chutes_components:
+                name = str(comp.get("name", "")).strip()
+                if not name:
+                    continue
+                count = comp.get("count", None)
+                unit = comp.get("unit", "Nos")
+                if count is None or count == "":
+                    output_lines.append(f"- {name}")
+                else:
+                    output_lines.append(f"- {name}: {count} {unit}")
+            if output_lines:
+                output_chutes_text = "\n".join(output_lines)
 
-CONFIRMED COMPONENTS (Merged Final List):
+        user_prompt += f"""USER-CONFIRMED COMPONENTS (Merged Final List):
 Sections: {manual_sections_text}
 {manual_components_summary}
 
+OUTPUT CHUTES (USE EXACT TYPES AND COUNTS, DO NOT OMIT ANY):
+{output_chutes_text if output_chutes_text else "Not provided"}
+
 IMPORTANT RULES:
 1. NO counts in any section EXCEPT Output Chutes
-2. Induction based on barcode scanning + volume data (NOT weight/dimensions)
-3. Write like a human - vary sentences, natural flow, no AI patterns
-4. Use client name: {client_name}
-5. {"Include VDS/Buffer loop system in Infeed section" if dxf_json.get('has_vds', False) else "No VDS system - shipments come directly from infeed"}
+2. Output Chutes must list ALL user-confirmed chute sub-types with exact counts
+3. For EACH chute type, write a full sentence that explains its function based on the chute name
+    - Gravity chute: gentle gravity flow for parcel collection
+    - Mini gravity chute: compact accumulation for lighter parcels
+    - Rejection chute: handles exception/rejected parcels
+    - Dispersion chute: spreads flow to avoid congestion
+    - Overweight chute: dedicated handling for heavy parcels
+    - Bulk/strand chute: bulk or controlled discharge to outbound
+    - Unknown type: state it is used for sorted parcel collection
+4. Induction based on barcode scanning + volume data (NOT weight/dimensions)
+5. Write like a human - vary sentences, natural flow, no AI patterns
+6. Use client name: {client_name}
+7. {"Include VDS/Buffer loop system in Infeed section" if dxf_json.get('has_vds', False) else "No VDS system - shipments come directly from infeed"}
+
+Output ONLY the process flow text. No notes or explanations."""
+    else:
+        # Fallback to DXF summary only if manual components not available
+        user_prompt += f"""{dxf_summary}
 
 Output ONLY the process flow text. No notes or explanations."""
     

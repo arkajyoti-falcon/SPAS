@@ -6644,61 +6644,67 @@ Return ONLY valid JSON. No explanation text.
 # ==================== GROQ PROMPTS & CONSTANTS ====================
 
 # Cover Letter System Prompt
+
 COVER_LETTER_SYSTEM_PROMPT = """
-You are an AI assistant working as a professional proposal writer at Falcon Autotech. You are an expert in drafting formal, client-specific techno-commercial cover letters for proposals. Your role is to generate well-structured, personalized cover letters that follow Falcon's business communication style, maintain a professional and respectful tone, and clearly demonstrate Falcon's commitment, expertise, and partnership approach to clients.
+You are a professional proposal writer at Falcon Autotech. Draft formal, client-specific techno-commercial cover letters in Falcon’s business style—confident, concise, respectful, and partnership-oriented.
 
-Generate a formal techno-commercial COVER LETTER for a proposal that MUST fit within a single page. 
-The writing style MUST be indistinguishable from natural human writing. The text should read as if drafted by an experienced professional, not an AI system. Use clear, simple, and natural language with varied sentence lengths and structures. Avoid generic phrases, repetitive patterns, or mechanical tone. Ensure that the output flows smoothly, conveys intent naturally, and would not be detected as machine-generated. The content should feel thoughtful, context-aware, and aligned with how a human proposal writer or business professional would communicate.
+STRICT LENGTH LIMIT: Maximum 300 words. Output must read like an experienced human wrote it. Avoid generic filler, repetition, and mechanical phrasing. No bullets in the body (header format is allowed as specified). Return ONLY the cover letter.
 
-STRICT LENGTH LIMIT: Maximum 300 words to ensure single-page fit. Be concise and impactful.
-
-1. Start with:
+FORMAT (must follow exactly):
+1) Start with:
    Kind Attention –
-   Mr. {{executives}}
+   {{executives}}
    M/s {{client_name}}
 
    Offer Ref: {{offer_ref}}; Date: {{letter_date}}
 
-   Subject – Techno-Commercial Offer for {{project_title}}  
+   Subject – Techno-Commercial Offer for {{project_title}}
 
-2. If there is only one executive, address them with:
-   Dear {{first_exec_name}},
-   If multiple executives, skip "Dear" and go directly to the content.
-   Use Mr. for male and Ms. for female executives.
+2) If there is only one executive:
+   Add “Dear {{first_exec_name}},” on a new line after the Subject line.
+   If multiple executives: do NOT use “Dear”; start directly with the body.
+   Use Mr. for male and Ms. for female executives (executives are already prefixed in input).
 
-3. Opening paragraph (natural, professional style):
-   - Thank the client for inviting Falcon to offer for the project.
-   - If invitation_date or meeting_date exists, reference it naturally (e.g., "Over the past period we worked closely together" or "In our meeting on [date], we discussed...").
-   - Mention that you are pleased to submit the Techno-Commercial Offer.
-   - Wording must vary between runs (not fixed sentences).
+STYLE TARGET (match Falcon examples):
+- Executive tone: crisp, credible, partner-led.
+- Keep technical details high-level; do NOT list internal sub-components (e.g., individual conveyor types, 90° turns, buffer counts, detailed chute categories).
+- Use at most 2–3 numeric details total in the body, prioritizing: induct/feedlines, destinations/output chutes, and PPH (if provided).
 
-4. Middle paragraph - System Overview & Analysis (CRITICAL):
-   - State that Falcon has done an in-depth data analysis and evaluated various solution options.
-   - **MANDATORY: Include the high-level process flow summary if provided**. Mention key system components naturally in a single sentence (e.g., "The proposed solution includes automatic induct conveyors, {cbs_type} for efficient sortation, and output chutes for sorted parcel handling").
-   - **CRITICAL: Use the EXACT CBS TYPE** from the context (either "Linear CBS" or "Loop CBS") - do NOT use generic "cross-belt sorter"
-   - Highlight any specific technical values, quantities, or capacities if mentioned (e.g., "200 destinations", "5 camera scanner systems", "2 speed settings").
-    - **MANDATORY PPH LINE**: If a PPH value is provided in the context, include a clear sentence such as "From a technical point of view, the system is designed at {PPH} PPH and ensures simple operations and movement within the facility." Use the actual PPH number from the provided data; if not provided, do not invent a value and skip this sentence.
-   - Keep this brief but informative - demonstrate technical understanding without overwhelming detail.
-   - Mention that the detailed technical proposal is laid out in various sections to provide full insight into the proposed solution.
+BODY STRUCTURE (3–5 short paragraphs):
+A) Opening:
+- Thank the client for the opportunity / RFQ / RFP.
+- If invitation_date or meeting_date is provided, reference it naturally in one short clause.
+- State you are pleased to submit the Techno-Commercial Offer.
 
-5. Commitment paragraph:
-   - Reference Falcon's intralogistics automation technologies and proven track record.
-   - Highlight subsequent sections covering capabilities, experiences, and references.
-   - Reinforce commitment to being a strategic partner.
+B) Falcon credibility (sales intent, understated):
+- Position Falcon as a prime contractor and a leader in intralogistics automation.
+- Include: “installed over 150 sorters worldwide” and “capacity ranging from 800 to 60,000 PPH”.
+- Keep this to 1–2 sentences.
 
-6. Closing (professional, warm):
-   - Add sender's personal commitment on behalf of Falcon Autotech.
-   - Encourage client to reach out for clarifications or further information.
-   - End with "Best Regards," followed by sender_name and sender_title.
+C) System overview & analysis (CRITICAL, keep compact):
+- State Falcon has done an in-depth data analysis and evaluated solution options.
+- MANDATORY: If process_flow_summary is provided, incorporate it in ONE sentence only, focusing on client-facing blocks:
+  Example pattern: “The proposed solution includes an infeed system, {feedlines/induct lines if present}, a {cbs_type}, and an output chute network of {destinations/chutes if present} for efficient parcel handling.”
+- CRITICAL: Use EXACT CBS TYPE from context: “Linear CBS” or “Loop CBS” (never generic “cross-belt sorter”).
+- Mention only MAIN quantities from the summary (feedlines/induct lines and total destinations/chutes). Ignore internal breakdown counts.
+- MANDATORY PPH LINE: If PPH is present, include EXACTLY this sentence (once):
+  “From a technical point of view, the system is designed at {PPH} PPH and ensures simple operations and movement within the facility.”
+  (Ensure it does NOT become “PPH PPH”.)
+- Add one sentence that the detailed technical proposal is laid out in sections to provide full insight and reinforce partnership intent.
 
-Important:
-- MUST NOT EXCEED 300 words to ensure single-page fit.
-- Keep tone formal, professional, and client-oriented.
-- Do not copy exact sentences; rephrase wording across generations.
-- The cover letter MUST sound human, natural and professional. It should be clear, authentic, and warm, without feeling robotic or overly formal.
-- DO NOT ADD ANY EXTRA WORD OR INFO APART FROM THE COVER LETTER.
-- Highlight the main system or project name in main body (not subject line) as bold style, use ** for Bold.
-- If process_flow_summary is provided, ALWAYS incorporate it naturally into the letter.
+D) Closing:
+- Add personal commitment on behalf of Falcon Autotech.
+- Invite clarifications and continued engagement through the RFP/RFQ process.
+- End with:
+  Best Regards,
+  {{sender_name}}
+  {{sender_title}}
+
+HARD RULES:
+- Do not add any extra information outside the cover letter.
+- Highlight the main system/project name in the main body (not in subject) using **bold** with **...**.
+- If process_flow_summary is missing, do not invent numbers or components.
+
 """
 
 COVER_LETTER_USER_PROMPT_TEMPLATE = """
@@ -6715,19 +6721,18 @@ executives (one per line, already with Mr./Ms. prefix):
 invitation_date: {invitation_date}
 meeting_date: {meeting_date}
 
-process_flow_summary (very high-level system components and key quantities): {process_flow_summary}
+user_confirmed_components (component details and counts from user):
+{user_confirmed_components}
 
 sender_name: {sender_name}
 sender_title: {sender_title}
 
-CRITICAL REQUIREMENTS:
-1. The cover letter MUST fit within a single page (maximum 300 words).
-2. If process_flow_summary is provided, ALWAYS incorporate it naturally into the letter body to demonstrate technical understanding.
-3. Mention any specific quantities or technical details from the summary to add credibility.
-4. If PPH (parcels per hour) is present in the provided data/counts, include a sentence in the technical paragraph: "From a technical point of view, the system is designed at {PPH} PPH and ensures simple operations and movement within the facility." Use the actual PPH value; if PPH is missing, skip this sentence (do not invent values).
-5. Keep the tone professional, warm, and client-focused like the example letter provided.
-
-Return ONLY the cover letter text, without markdown code fences or extra commentary.
+REMINDERS:
+- Keep system description to ONE sentence; no internal sub-component listing.
+- Use only 2–3 numbers total (prefer induct/feedlines, destinations/chutes, and PPH if present).
+- Use EXACT CBS TYPE (“Linear CBS” / “Loop CBS”).
+- If PPH exists, include the exact mandatory PPH sentence once.
+- Return ONLY the cover letter text.
 """
 
 # Executive Summary System Prompt
@@ -9364,10 +9369,15 @@ def call_groq_cover_letter(
     meeting_date: str,
     sender_name: str,
     sender_title: str,
-    process_flow_summary: str = "",
+    user_confirmed_components: str = "",
     context: Optional[ProposalContext] = None,
+    manual_components_context: dict = None,
 ) -> str:
-    """Call Groq API to generate the cover letter text."""
+    """Call Groq API to generate the cover letter text.
+    
+    Args:
+        manual_components_context: Merged components from user confirmation (has components_summary)
+    """
     counts_block = context.counts_block_text() + "\n\n" if context else ""
     gating_issues = validate_context_counts(context) if context and ENABLE_CONTEXT_UNIFICATION else []
     
@@ -9385,7 +9395,7 @@ def call_groq_cover_letter(
             executives_block=executives_block.strip() or "Not provided",
             invitation_date=invitation_date.strip() or "Not provided",
             meeting_date=meeting_date.strip() or "Not provided",
-            process_flow_summary=process_flow_summary.strip() or "Not provided",
+            user_confirmed_components=user_confirmed_components.strip() or "Not provided",
             sender_name=sender_name,
             sender_title=sender_title,
             PPH=pph_value,
@@ -9393,6 +9403,13 @@ def call_groq_cover_letter(
             "\n\nIf any counts are missing, avoid inventing numbers; use safe phrasing without quantities." if gating_issues else ""
         )
     )
+    
+    # Add merged components from user confirmation if available
+    if manual_components_context:
+        components_summary = manual_components_context.get("components_summary", "")
+        if components_summary:
+            user_prompt += f"\n\nUSER-CONFIRMED COMPONENTS:\n{components_summary}"
+    
     if context:
         ctx_counts = context.counts_block_text().replace('\n',' | ')
         logger.info(f"Using ProposalContext counts for Cover Letter: {ctx_counts}")
@@ -9434,8 +9451,13 @@ def call_groq_exec_summary(
     dxf_json: dict = None,
     facts: Optional[ProposalFacts] = None,
     context: Optional[ProposalContext] = None,
+    manual_components_context: dict = None,
 ) -> str:
-    """Call Groq API to generate the Executive Summary text."""
+    """Call Groq API to generate the Executive Summary text.
+    
+    Args:
+        manual_components_context: Merged components from user confirmation (has components_summary)
+    """
     # Use ProposalContext counts when provided; otherwise fallback to legacy behavior
     component_counts = ""
     if context:
@@ -9487,6 +9509,12 @@ def call_groq_exec_summary(
     
     if component_counts and not context:
         user_content += f"COMPONENT COUNTS FROM DXF:\n{component_counts}\n\n"
+    
+    # Add merged components from user confirmation if available
+    if manual_components_context:
+        components_summary = manual_components_context.get("components_summary", "")
+        if components_summary:
+            user_content += f"USER-CONFIRMED COMPONENTS:\n{components_summary}\n\n"
     
     user_content += (
         f"Proposed System Description (for context):\n{system_text}\n\n"
@@ -11337,8 +11365,8 @@ else:
     # Create main tabs for different sorter systems (badges added via CSS)
     main_cbs, main_neo, main_cubizone, main_robodome = st.tabs([
         "CBS",
-        "Neo",
-        "Cubizone",
+        "NEO",
+        "Cubizon",
         "Robodome 2.0",
     ])
     st.markdown("</div>", unsafe_allow_html=True)
@@ -15666,6 +15694,7 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
     system_description_text = None
     cover_letter_text = None
     flowchart_png_bytes = None
+    layout_png_path = None
     dxf_json = None
     facts = None
     context = None
@@ -15823,46 +15852,11 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                 cover_letter_text = None
                 if offer_ref and sender_name:
                     try:
-                        # Create enhanced high-level summary from process flow and DXF data
-                        process_flow_summary = ""
-                        if process_flow_text:
-                            lines = process_flow_text.strip().split('\n')
-                            # Extract main system components from process flow
-                            summary_components = []
-                            for line in lines[:5]:  # Look at first 5 lines for better coverage
-                                # Extract component names (remove numbering and description after colon)
-                                if ':' in line:
-                                    component = line.split(':')[0].strip()
-                                    # Remove numbering (1., 2., etc.)
-                                    component = component.lstrip('0123456789. ')
-                                    if component and len(component) > 3:  # Avoid empty or very short strings
-                                        summary_components.append(component)
-                        
-                        # Add key quantities from DXF if available
-                        quantities = []
-                        if dxf_json:
-                            if dxf_json.get('total_chutes', 0) > 0:
-                                quantities.append(f"{dxf_json['total_chutes']} chutes")
-                            if dxf_json.get('total_operators', 0) > 0:
-                                quantities.append(f"{dxf_json['total_operators']} operator stations")
-                            # Add other relevant quantities if present
-                            if dxf_json.get('scanner_systems', 0) > 0:
-                                quantities.append(f"{dxf_json['scanner_systems']} scanner systems")
-                        
-                        # Combine components and quantities into natural summary
-                        if summary_components:
-                            process_flow_summary = ", ".join(summary_components[:3])  # First 3 components
-                            if quantities:
-                                process_flow_summary += f" with {', '.join(quantities[:2])}"  # Add up to 2 quantities
-                        
-                        # If quantities are still empty, fall back to ProposalFacts
-                        if not quantities and facts:
-                            chute_val, _, _ = get_counts_source_of_truth(facts, "gravity_chutes")
-                            feed_val, _, _ = get_counts_source_of_truth(facts, "feedlines")
-                            if feed_val:
-                                quantities.append(f"{feed_val} induct lines")
-                            if chute_val:
-                                quantities.append(f"{chute_val} gravity chutes")
+                        # Build user_confirmed_components from merged list (ground truth)
+                        user_confirmed_components = ""
+                        manual_components = st.session_state.get("manual_components_context", None)
+                        if manual_components and manual_components.get("components_summary"):
+                            user_confirmed_components = manual_components["components_summary"]
                         
                         cover_letter_text = call_groq_cover_letter(
                             client_name=client_name,
@@ -15874,8 +15868,9 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                             meeting_date=meeting_date_str,
                             sender_name=sender_name,
                             sender_title=sender_title,
-                            process_flow_summary=process_flow_summary,
+                            user_confirmed_components=user_confirmed_components,
                             context=context,
+                            manual_components_context=st.session_state.get("manual_components_context", None),
                         )
                         # Store for feedback regeneration
                         st.session_state.section_content_cover_letter = cover_letter_text
@@ -15930,21 +15925,31 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                         # Generate Executive Summary from process flow if included
                         if include_exec_summary and process_flow_text:
                             progress_bar.progress(46, text="Summarizing key highlights...")
-                            cbs_type_detected = dxf_json.get('cbs_type', 'Cross-belt technology') if dxf_json else 'Cross-belt technology'
-                            exec_summary_text = call_groq_exec_summary(
-                                process_flow_text, 
-                                client_name, 
-                                project_name,
-                                pph_count=pph_count, 
-                                cbs_type=cbs_type_detected,
-                                dxf_json=dxf_json,
-                                facts=facts,
-                                context=context,
-                            )
-                            # Store for feedback regeneration
-                            st.session_state.section_content_executive_summary = exec_summary_text
-                            st.session_state.section_original_executive_summary = exec_summary_text  # Store original for comparison
-                            time.sleep(2)  # Delay to avoid rate limits
+                            try:
+                                cbs_type_detected = dxf_json.get('cbs_type', 'Cross-belt technology') if dxf_json else 'Cross-belt technology'
+                                manual_components_ctx = st.session_state.get("manual_components_context", None)
+                                exec_summary_text = call_groq_exec_summary(
+                                    process_flow_text, 
+                                    client_name, 
+                                    project_name,
+                                    pph_count=pph_count, 
+                                    cbs_type=cbs_type_detected,
+                                    dxf_json=dxf_json,
+                                    facts=facts,
+                                    context=context,
+                                    manual_components_context=manual_components_ctx,
+                                )
+                                # Store for feedback regeneration
+                                st.session_state.section_content_executive_summary = exec_summary_text
+                                st.session_state.section_original_executive_summary = exec_summary_text  # Store original for comparison
+                                logger.info(f"✓ Executive Summary generated successfully ({len(exec_summary_text)} chars)")
+                                time.sleep(2)  # Delay to avoid rate limits
+                            except Exception as e:
+                                exec_summary_text = None
+                                logger.error(f"Executive Summary generation failed: {e}", exc_info=True)
+                                st.warning(f"Executive Summary generation failed: {str(e)[:150]}")
+                        else:
+                            logger.warning(f"Executive Summary skipped: include_exec_summary={include_exec_summary}, process_flow_available={process_flow_text is not None}")
                                                 
                         # Generate Mermaid Flowchart if Concept Description is included
                         if include_concept_desc and process_flow_text:
