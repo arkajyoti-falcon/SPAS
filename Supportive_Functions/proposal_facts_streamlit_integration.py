@@ -129,11 +129,6 @@ def integrate_proposal_facts_upload(
                 if verbose:
                     st.success("✅ Proposal facts extracted successfully!")
                     
-                    # Show extraction summary with nice formatting
-                    with st.expander("📊 Extracted Data Summary", expanded=False):
-                        summary_text = facts.summary()
-                        st.code(summary_text, language="text")
-                    
                     # Show unconfirmed fields warning
                     unconfirmed = facts.get_unconfirmed_fields()
                     if unconfirmed:

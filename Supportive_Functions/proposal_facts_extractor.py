@@ -87,9 +87,6 @@ class ProposalFactsExtractor:
         if errors:
             logger.warning(f"Validation issues found: {errors}")
         
-        # Log summary
-        logger.info(self.facts.summary())
-        
         return self.facts
     
     def _extract_dxf_metrics(self):

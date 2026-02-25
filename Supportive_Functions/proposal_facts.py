@@ -471,9 +471,6 @@ if __name__ == "__main__":
     }
     populate_from_costing(facts, costing_data)
     
-    # Print summary
-    print(facts.summary())
-    
     # Access specific counts
     count, source, confirmed = get_counts_source_of_truth(facts, "gravity_chutes")
     print(f"\nGravity Chutes: {count} (source: {source}, confirmed: {confirmed})")
