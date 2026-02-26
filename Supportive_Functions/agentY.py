@@ -1275,12 +1275,23 @@ Bag Takeaway Conveyor: After sorting and bagging, shipments go onto a bag takeaw
 
 **ONLY RETURN A CLEAN PROCESS FLOW, NO EXPLANATION OR EXTRA TEXT IS NEEDED**"""
     
+    # Check for user-selected induction mode (takes priority over auto-detected type)
+    is_auto_induct = dxf_json.get('is_auto_induct', False)
+    if is_auto_induct:
+        induction_mode = "AUTO INDUCT"
+        induction_note = "(USER CONFIRMED: Auto Induct - parcels are automatically inducted onto the sorter)"
+    else:
+        induction_mode = "MANUAL INDUCT"
+        induction_note = "(USER CONFIRMED: Manual Induct - operators pick and position each shipment with barcode facing upwards)"
+    
     user_prompt = f"""Generate process flow for:
 
 CLIENT: {client_name}
 CBS TYPE: {dxf_json['cbs_type']}
-INDUCTION: {dxf_json['induction_type']}
+INDUCTION MODE: {induction_mode} {induction_note}
 VDS PRESENT: {"YES" if dxf_json.get('has_vds', False) else "NO"}
+
+IMPORTANT: Use the INDUCTION MODE specified above. If MANUAL INDUCT, describe operators picking and positioning shipments. If AUTO INDUCT, describe automatic induction.
 
 COMPONENTS:
 """
@@ -1321,16 +1332,20 @@ IMPORTANT RULES:
     - Dispersion chute: spreads flow to avoid congestion
     - Overweight chute: dedicated handling for heavy parcels
     - Bulk/strand chute: bulk or controlled discharge to outbound
-    - Unknown type: state it is used for sorted parcel collection
+    - Unknown type: state it is used for sorted parcel collection based on it's name.
 4. Induction based on barcode scanning + volume data (NOT weight/dimensions)
 5. Write like a human - vary sentences, natural flow, no AI patterns
 6. Use client name: {client_name}
 7. {"Include VDS/Buffer loop system in Infeed section" if dxf_json.get('has_vds', False) else "No VDS system - shipments come directly from infeed"}
+8. CRITICAL INDUCTION MODE: {"AUTO INDUCT - describe automatic induction (parcels automatically inducted onto the sorter, barcodes scanned, volume data captured)" if is_auto_induct else "MANUAL INDUCT - describe manual induction (operators pick and position each shipment on the induct line with barcode facing upwards). Do NOT mention auto-induct or automatic induction."}
 
 Output ONLY the process flow text. No notes or explanations."""
     else:
         # Fallback to DXF summary only if manual components not available
+        induction_rule = "AUTO INDUCT - describe automatic induction (parcels automatically inducted onto the sorter, barcodes scanned, volume data captured)" if is_auto_induct else "MANUAL INDUCT - describe manual induction (operators pick and position each shipment on the induct line with barcode facing upwards). Do NOT mention auto-induct or automatic induction."
         user_prompt += f"""{dxf_summary}
+
+CRITICAL INDUCTION MODE: {induction_rule}
 
 Output ONLY the process flow text. No notes or explanations."""
     
@@ -1733,6 +1748,14 @@ JUST OUTPUT THE CLEAN PROCESS FLOW TEXT. Write like a human. No AI patterns. Cou
                 if ref_mentions:
                     missing.append(f"{cat} ({count} units)")
     
+    # Check for user-selected induction mode
+    is_auto_induct = dxf_json.get('is_auto_induct', False)
+    induction_mode_instruction = ""
+    if is_auto_induct:
+        induction_mode_instruction = "**INDUCTION MODE (USER SELECTED): AUTO INDUCT** - Describe automatic induction (parcels automatically inducted onto the sorter, barcodes scanned, volume data captured). Do NOT describe manual induction."
+    else:
+        induction_mode_instruction = "**INDUCTION MODE (USER SELECTED): MANUAL INDUCT** - Describe manual induction (operators pick and position each shipment on the induct line with barcode facing upwards). Do NOT describe auto-induct or automatic induction."
+    
     user_prompt = f"""
 === INITIAL FLOW ===
 {initial_flow}
@@ -1747,6 +1770,7 @@ JUST OUTPUT THE CLEAN PROCESS FLOW TEXT. Write like a human. No AI patterns. Cou
 2. **Induction = barcode + volume scan** - NOT "weight and dimensions"
 3. **Write like a human** - vary sentences, no AI phrases ("Furthermore", "Additionally")
 4. **Use client name:** {client_name} (NEVER use reference client names)
+5. {induction_mode_instruction}
 
 **For Induction, describe like this:**
 - Manual: "Operators position shipments with barcode facing up. After buffering, feedlines merge them onto the CBS."
@@ -1798,6 +1822,10 @@ def iterative_refinement(
     
     current_coherence = evaluation['structural_coherence']
     gap_to_target = target_score - current_coherence
+    
+    # Check for user-selected induction mode
+    is_auto_induct = dxf_json.get('is_auto_induct', False)
+    induction_mode_note = "AUTO INDUCT (parcels automatically inducted)" if is_auto_induct else "MANUAL INDUCT (operators pick and position shipments with barcode facing up)"
     
     # Format feedback
     feedback_text = ""
@@ -1870,6 +1898,7 @@ Generate the refined flow with ONLY the micro-changes applied.
 2. **Induction = barcode + volume scan** - NOT "weight and dimensions"  
 3. **Write like a human** - no AI phrases
 4. Remove any phrases like "based on dimensions and weight" from induction descriptions
+5. **INDUCTION MODE: {induction_mode_note}** - Do NOT change the induction type
 
 **MUST:**
 - Start with "Process Flow"
@@ -1899,6 +1928,7 @@ Generate the refined flow with ONLY the micro-changes applied.
 - Induction is barcode/volume based, NOT weight/dimension based
 - Write like a human, avoid AI patterns
 - Apply ONLY the changes listed in feedback
+- **INDUCTION MODE: {induction_mode_note}** - Maintain the specified induction type
 
 Generate refined flow now."""
 

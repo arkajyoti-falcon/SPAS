@@ -1,4 +1,4 @@
-
+﻿
 import os
 import io
 import streamlit as st
@@ -262,6 +262,7 @@ def extract_induct_counts_no_calc(kv: Dict[str, Any]) -> Dict[str, int]:
         "orientation_loading_conveyor": 0,
         "spacing_conveyor": 0,
         "receiving_conveyor": 0,
+        "weighing_conveyor": 0,
     }
 
     for k, v in kv.items():
@@ -281,6 +282,8 @@ def extract_induct_counts_no_calc(kv: Dict[str, Any]) -> Dict[str, int]:
             out["orientation_loading_conveyor"] = _to_int(v)
         elif "receiving conveyor" in kl:
             out["receiving_conveyor"] = _to_int(v)
+        elif "weighing conveyor" in kl:
+            out["weighing_conveyor"] = _to_int(v)
 
     return out
 
@@ -446,14 +449,53 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"Could not determine VDS status: {e}")
         
-        # Get induct components
+        # Get induct components (with explicit Weighing Conveyor extraction)
         try:
             costing_sheet = pick_costing_sheet_visible_only(wb)
-            kv = read_section_kv(wb[costing_sheet], "Main Inducts")
+            ws = wb[costing_sheet]
+            kv = read_section_kv(ws, "Main Inducts")
             induct_counts = extract_induct_counts_no_calc(kv)
+
+            # --- Enhancement: Extract Total Inductions and Weighing Conveyor Total ---
+            total_inductions = 0
+            total_weighing_conveyors = 0
             
+            # Search for "Total Inductions" and "Enter Number of Weighing Conveyors(Total)" in the sheet
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
+                # Check column B (index 1) for labels, column C (index 2) for values
+                cell_b_val = str(row[1].value).strip().lower() if len(row) > 1 and row[1].value else ""
+                cell_c_val = row[2].value if len(row) > 2 else None
+                
+                # Also check column A (index 0) for labels, column B (index 1) for values
+                cell_a_val = str(row[0].value).strip().lower() if row[0].value else ""
+                cell_b_as_val = row[1].value if len(row) > 1 else None
+                
+                # Match "Total Inductions"
+                if "total inductions" in cell_b_val or "totalinductions" in cell_b_val.replace(" ", ""):
+                    try:
+                        total_inductions = _to_int(cell_c_val)
+                    except Exception:
+                        pass
+                
+                # Match "Enter Number of Weighing Conveyors(Total)"
+                if cell_b_val.replace(" ", "").replace("(", "").replace(")", "") == "enternumberofweighingconveyorstotal":
+                    try:
+                        total_weighing_conveyors = _to_int(cell_c_val)
+                    except Exception:
+                        pass
+
+            # Calculate per-induct weighing conveyor count
+            # Formula: weighing_per_induct = total_weighing_conveyors // total_inductions
+            weighing_per_induct = 0
+            if total_inductions > 0 and total_weighing_conveyors > 0:
+                weighing_per_induct = total_weighing_conveyors // total_inductions
+            
+            # Override weighing conveyor count with calculated per-induct value
+            induct_counts["weighing_conveyor"] = weighing_per_induct
+
             # Extract feedline count (total number of inducts in the system)
             feedline_count = None
+            # First try from kv (Main Inducts section)
             for k, v in kv.items():
                 kl = k.lower()
                 if ("total number of inducts" in kl) or ("number of inducts" in kl and "system" in kl):
@@ -463,6 +505,10 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
                     except (ValueError, TypeError):
                         pass
             
+            # Fallback to total_inductions if not found in kv
+            if feedline_count is None and total_inductions > 0:
+                feedline_count = total_inductions
+
             induct_components = [
                 {"component": "Intelligent Angle Merge Conveyor", "count": induct_counts["intelligent_angle_merge"]},
                 {"component": "Buffer Conveyor", "count": induct_counts["buffer_conveyor"]},
@@ -470,6 +516,10 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
                 {"component": "Spacing Conveyor", "count": induct_counts["spacing_conveyor"]},
                 {"component": "Receiving Conveyor", "count": induct_counts["receiving_conveyor"]},
             ]
+            # Only add Weighing Conveyor if per-induct count > 0
+            if induct_counts["weighing_conveyor"] > 0:
+                induct_components.append({"component": "Weighing Conveyor", "count": induct_counts["weighing_conveyor"]})
+
             # Filter out zero counts
             extracted["induct"] = [x for x in induct_components if int(x["count"]) != 0]
             extracted["feedline_count"] = feedline_count
@@ -1470,6 +1520,31 @@ def _render_induct_system_section(induct_components: List[Dict]) -> None:
         unsafe_allow_html=True
     )
     
+    # Initialize auto induct checkbox state (default: Manual Induct = unchecked)
+    if "is_auto_induct" not in st.session_state:
+        st.session_state.is_auto_induct = False
+    
+    # Add Auto Induct checkbox
+    st.markdown(
+        "<div style='padding: 8px 12px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 12px;'>"
+        "<span style='font-size: 12px; color: #4a5568; font-weight: 600;'>Induction Mode Selection</span>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+    is_auto_induct = st.checkbox(
+        "Auto Induct",
+        value=st.session_state.is_auto_induct,
+        key="auto_induct_checkbox",
+        help="Check for Auto Induct (parcels automatically inducted). Leave unchecked for Manual Induct (operators pick and position each shipment)."
+    )
+    st.session_state.is_auto_induct = is_auto_induct
+    
+    # Show induction mode description
+    if is_auto_induct:
+        st.info("🤖 **Auto Induct Mode**: Parcels are automatically inducted onto the sorter. Barcodes are scanned and volume data captured as parcels merge onto the sorter.")
+    else:
+        st.info("👷 **Manual Induct Mode**: Operators pick and position each shipment on the induct line with barcode facing upwards.")
+    
     # Show Parcel Inducts sub-section
     if induct_type in ["Parcel", "Both"]:
         parcel_count = len(st.session_state.get("components_induct_parcel", []))
@@ -1770,6 +1845,7 @@ def show_merged_components_dialog(
                 st.session_state.show_merged_components_dialog = False
                 st.session_state.use_manual_components = True
                 st.session_state.induct_type_confirmed = st.session_state.get("induct_type_selection", "Both")
+                st.session_state.is_auto_induct_confirmed = st.session_state.get("is_auto_induct", False)
                 
                 # Convert to context format
                 components_context = _convert_mapped_components_to_context(all_updated_components)
@@ -5329,6 +5405,7 @@ def call_groq_for_process_flow(
     facts: Optional[ProposalFacts] = None,
     context: Optional[ProposalContext] = None,
     manual_components_context: Optional[Dict] = None,
+    is_auto_induct: bool = False,
 ):
     """
     Generate process flow using agentY logic with PROGRESSIVE IMPROVEMENT PROTECTION.
@@ -5347,6 +5424,7 @@ def call_groq_for_process_flow(
         facts: ProposalFacts instance with component counts
         context: ProposalContext instance with system counts
         manual_components_context: Manually configured components from the UI editor
+        is_auto_induct: True for Auto Induct, False for Manual Induct (default)
     
     Returns:
         tuple: (final_flow_text, iteration_details_list)
@@ -5356,6 +5434,10 @@ def call_groq_for_process_flow(
     
     safe_dxf_json = {k: v for k, v in (dxf_json or {}).items() if k != "raw_block_counts"}
     safe_dxf_json['client'] = client_name
+    
+    # Pass the auto/manual induct flag
+    safe_dxf_json['is_auto_induct'] = is_auto_induct
+    logger.info(f"Induction mode: {'AUTO' if is_auto_induct else 'MANUAL'}")
 
     # Enrich with manual component configuration if available
     if manual_components_context:
@@ -6662,7 +6744,7 @@ Return ONLY valid JSON. No explanation text.
 COVER_LETTER_SYSTEM_PROMPT = """
 You are a professional proposal writer at Falcon Autotech. Draft formal, client-specific techno-commercial cover letters in Falcon’s business style—confident, concise, respectful, and partnership-oriented.
 
-STRICT LENGTH LIMIT: Maximum 300 words. Output must read like an experienced human wrote it. Avoid generic filler, repetition, and mechanical phrasing. No bullets in the body (header format is allowed as specified). Return ONLY the cover letter.
+STRICT LENGTH LIMIT: 280-350 words (body only, excluding header). Output must read like an experienced human wrote it. Avoid generic filler, repetition, and mechanical phrasing. No bullets in the body (header format is allowed as specified). Return ONLY the cover letter. The letter MUST fit on ONE page.
 
 FORMAT (must follow exactly):
 1) Start with:
@@ -6684,31 +6766,34 @@ STYLE TARGET (match Falcon examples):
 - Keep technical details high-level; do NOT list internal sub-components (e.g., individual conveyor types, 90° turns, buffer counts, detailed chute categories).
 - Use at most 2–3 numeric details total in the body, prioritizing: induct/feedlines, destinations/output chutes, and PPH (if provided).
 
-BODY STRUCTURE (3–5 short paragraphs):
+BODY STRUCTURE (4–5 well-developed paragraphs):
 A) Opening:
 - Thank the client for the opportunity / RFQ / RFP.
-- If invitation_date or meeting_date is provided, reference it naturally in one short clause.
+- If invitation_date or meeting_date is provided, reference it naturally stating you have taken the opportunity to include adjustments discussed.
 - State you are pleased to submit the Techno-Commercial Offer.
 
 B) Falcon credibility (sales intent, understated):
-- Position Falcon as a prime contractor and a leader in intralogistics automation.
-- Include: “installed over 150 sorters worldwide” and “capacity ranging from 800 to 60,000 PPH”.
-- Keep this to 1–2 sentences.
+- Position Falcon as a prime contractor and a global leader in intralogistics automation.
+- MANDATORY BOLD PHRASES: Include these EXACT phrases with **bold** markdown:
+  - "**150 sorters worldwide**"
+  - "**800 to 60,000 PPH**"
+- Full sentence pattern: "Falcon has installed over **150 sorters worldwide** with capacity ranging from **800 to 60,000 PPH** and has an excellent track record in designing, manufacturing, and installing parcel sortation systems."
+- Keep this to 2–3 sentences.
 
-C) System overview & analysis (CRITICAL, keep compact):
-- State Falcon has done an in-depth data analysis and evaluated solution options.
-- MANDATORY: If process_flow_summary is provided, incorporate it in ONE sentence only, focusing on client-facing blocks:
-  Example pattern: “The proposed solution includes an infeed system, {feedlines/induct lines if present}, a {cbs_type}, and an output chute network of {destinations/chutes if present} for efficient parcel handling.”
-- CRITICAL: Use EXACT CBS TYPE from context: “Linear CBS” or “Loop CBS” (never generic “cross-belt sorter”).
-- Mention only MAIN quantities from the summary (feedlines/induct lines and total destinations/chutes). Ignore internal breakdown counts.
-- MANDATORY PPH LINE: If PPH is present, include EXACTLY this sentence (once):
-  “From a technical point of view, the system is designed at {PPH} PPH and ensures simple operations and movement within the facility.”
-  (Ensure it does NOT become “PPH PPH”.)
-- Add one sentence that the detailed technical proposal is laid out in sections to provide full insight and reinforce partnership intent.
+C) System overview & requirements understanding (CRITICAL, more detailed):
+- State that you have studied their requirements in great depth.
+- Mention information collected during workshops/calls with the client.
+- State that you have put together a detailed technical proposal laid out in various sections and sequenced to enable understanding of the proposed solution and reinforce commitment as their partner in this strategic initiative.
+- MANDATORY: If process_flow_summary is provided, incorporate it naturally, focusing on client-facing blocks:
+  Example: "The proposed solution includes an infeed system, {feedlines/induct lines}, a {cbs_type}, and an output chute network of {destinations/chutes} for efficient parcel handling."
+- CRITICAL: Use EXACT CBS TYPE from context: "Linear CBS" or "Loop CBS" (never generic "cross-belt sorter").
+- MANDATORY PPH LINE: If PPH is present, include this sentence with PPH value BOLDED:
+  "From a technical point of view, the system is designed at **{PPH} PPH** and ensures simple operations and movement within the facility."
 
 D) Closing:
 - Add personal commitment on behalf of Falcon Autotech.
-- Invite clarifications and continued engagement through the RFP/RFQ process.
+- Invite the client to not hesitate to contact you and your team.
+- State you will be pleased to assist with any further information or clarifications.
 - End with:
   Best Regards,
   {{sender_name}}
@@ -6716,8 +6801,10 @@ D) Closing:
 
 HARD RULES:
 - Do not add any extra information outside the cover letter.
+- MUST use **bold** markdown for: "150 sorters worldwide", "800 to 60,000 PPH", and the PPH value (e.g., "**10,000 PPH**").
 - Highlight the main system/project name in the main body (not in subject) using **bold** with **...**.
 - If process_flow_summary is missing, do not invent numbers or components.
+- Keep letter professional and flowing - must fit on ONE page.
 
 """
 
@@ -6771,20 +6858,24 @@ Write as a single connected paragraph containing:
 - Start with EXACTLY ONE LINE: "Our solution is based on the following key characteristics:"
 - DO NOT REPEAT THIS LINE
 - Then provide 4-6 bullet points as FULL DESCRIPTIVE SENTENCES
+- SALES HIGHLIGHTING: In each bullet point, use **bold** markdown for key sales elements:
+  - Main components (e.g., **Loop CBS**, **Linear CBS**, **induct lines**, **telescopic conveyors**)
+  - Throughput numbers (e.g., **10,000 packages per hour**, **10,000 PPH**)
+  - Total chute counts (e.g., **58 gravity chutes**)
 
 **BULLET POINT RULES - CRITICAL:**
 Each bullet must be a COMPLETE SENTENCE with context (not just item names). Use these patterns:
 
 BULLET 1 - CBS/Sorter (ALWAYS FIRST):
 - Use EXACT CBS TYPE from metadata: "Linear CBS for parcel sorting..." or "Loop CBS for parcel sorting..."
-- Full format: "[Linear CBS/Loop CBS] for parcel sorting, employing cross-belt technology, has been designed to handle a throughput of [PPH] packages per hour."
+- Full format: "**[Linear CBS/Loop CBS]** for parcel sorting, employing cross-belt technology, has been designed to handle a throughput of **[PPH] packages per hour**."
 - CRITICAL: Do NOT use generic "[Loop CBS / Linear CBS]" - use the SPECIFIC type from the project
 
 BULLET 2 - Induct System (combine feedlines + manual in ONE bullet):
 - Use EXACT CBS TYPE: "This Linear CBS is equipped with..." or "This Loop CBS is equipped with..."
-- Full format: "This [Linear CBS/Loop CBS] is equipped with [COUNT] Nos fully automatic induct lines, along with manual loading point."
-- OR "The system features [COUNT] induct lines for automated parcel induction, with provision for manual loading."
-- NOTE: Do NOT count manual stations separately. Just mention "manual loading point" as part of induct bullet.
+- Full format: "This [Linear CBS/Loop CBS] is equipped with **[COUNT] Nos fully automatic induct lines**."
+- CRITICAL: Only add "along with manual loading point" if manual loading/operator stations are EXPLICITLY found in the DXF components. Do NOT assume manual loading exists unless clearly present in the data.
+- If manual loading IS found in DXF: "This [Linear CBS/Loop CBS] is equipped with [COUNT] Nos fully automatic induct lines, along with manual loading point."
 - CRITICAL: Use the SPECIFIC CBS type from the project, not generic "[Loop/Linear]"
 
 BULLET 3 - Conveyor/Transport System:
@@ -6799,7 +6890,8 @@ BULLET 5 - Layout/Operations (if needed):
 - "The system layout has been meticulously planned to facilitate smooth operational flow, ensuring efficient movement of personnel."
 
 **CLOSING SECTION** (separate paragraph after bullets)
-"A tailor-made and simple layout, specifically designed to [CLIENT NAME]. The proposed layout is the result of the technical requirements in the RFP document and our discussions with the relevant stakeholders during our site visit and Teams workshop meeting."
+"**A tailor-made and simple layout, specifically designed to [CLIENT NAME].**" (This entire sentence MUST be bold using **...** markdown)
+The proposed layout is the result of the technical requirements in the RFP document and our discussions with the relevant stakeholders during our site visit and Teams workshop meeting.
 Then add as dash points:
 - Simple operational conditions due to one single [loop/linear] cross belt sorter.
 - Easy maintenance: optimized number of conveyors and concentrated inducts area.
@@ -6815,16 +6907,16 @@ Demonstrating Falcon's clear commitment to the {client_name}'s satisfaction, the
 ### CRITICAL RULES
 1. DO NOT repeat "Our solution is based on the following key characteristics:" - write it only ONCE
 2. Each bullet must be a FULL SENTENCE with explanation, not just item names
-3. DO NOT count manual induct stations - just mention "manual loading point" as part of another bullet
-4. Combine related items: feedlines + manual in one bullet, all chutes in one bullet
+3. CRITICAL: Only mention "manual loading point" if manual loading stations/operator stations are EXPLICITLY found in the DXF component data. Do NOT assume or add "manual loading point" unless it is clearly present in the provided components.
+4. Combine related items: all chutes in one bullet
 5. Use "Induct Lines" not "Feedlines" in the output
 6. Throughput format: "[NUMBER] packages per hour" or "[NUMBER] pph"
 
 ### GOOD EXAMPLES OF BULLETS:
-• "Loop CBS for parcel sorting, employing cross-belt technology, has been designed to handle a throughput of 10,000 packages per hour."
-• "This Loop CBS is equipped with 3 Nos fully automatic induct lines, along with manual loading point."
+• "**Loop CBS** for parcel sorting, employing cross-belt technology, has been designed to handle a throughput of **10,000 packages per hour**."
+• "This Loop CBS is equipped with **3 Nos fully automatic induct lines**." (Only add "along with manual loading point" if manual loading is found in DXF)
 • "The system is having its own conveyor connection to transport the volume from primary loading points to the induction zone."
-• "In the system, there are 58 gravity chutes, 70 mini-gravity chutes, 7 rejection chutes, and 1 bulk chute for efficient parcel distribution."
+• "In the system, there are **58 gravity chutes**, **70 mini-gravity chutes**, **7 rejection chutes**, and **1 bulk chute** for efficient parcel distribution."
 • "The system layout has been meticulously planned to facilitate smooth operational flow, ensuring efficient movement of personnel."
 
 ### BAD EXAMPLES (DO NOT USE):
@@ -6832,6 +6924,7 @@ Demonstrating Falcon's clear commitment to the {client_name}'s satisfaction, the
 • "32 Manual Induct Stations" ❌ (don't count manual stations)
 • "202 generic chutes" ❌ (too vague, add context)
 • "Sorter, based on a cross-belt technology, offers a designed throughput of 1200 pph." ❌ (too short)
+• "along with manual loading point" ❌ (NEVER add unless manual loading is explicitly found in DXF)
 
 ### OUTPUT FORMAT
 1. Opening paragraph (all sentences combined into one flowing paragraph)
@@ -9052,6 +9145,102 @@ def _clear_header_footer_part(part):
             parent.remove(paragraph._element)
 
 
+def remove_blank_pages(doc: Document) -> None:
+    """
+    Remove blank pages from the document.
+    A blank page is identified as consecutive page breaks with no meaningful content between them,
+    or paragraphs that only contain whitespace followed by a page break.
+    """
+    from docx.oxml.ns import qn as qname
+    
+    word_ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+    body = doc.element.body
+    elements_to_remove = []
+    
+    # Iterate through body elements to find blank page patterns
+    body_children = list(body)
+    i = 0
+    while i < len(body_children):
+        elem = body_children[i]
+        
+        # Check if this is a paragraph element
+        if elem.tag == f'{{{word_ns}}}p':
+            # Check if paragraph has only a page break and/or whitespace
+            has_page_break = False
+            has_content = False
+            
+            for child in elem.iter():
+                # Check for page break
+                if child.tag == f'{{{word_ns}}}br':
+                    br_type = child.get(f'{{{word_ns}}}type')
+                    if br_type == 'page':
+                        has_page_break = True
+                # Check for text content
+                if child.tag == f'{{{word_ns}}}t':
+                    text = child.text or ''
+                    if text.strip():
+                        has_content = True
+            
+            # If this paragraph is just a page break with no content
+            if has_page_break and not has_content:
+                # Check if the next element is also a page break (consecutive page breaks = blank page)
+                if i + 1 < len(body_children):
+                    next_elem = body_children[i + 1]
+                    if next_elem.tag == f'{{{word_ns}}}p':
+                        next_has_page_break = False
+                        next_has_content = False
+                        for child in next_elem.iter():
+                            if child.tag == f'{{{word_ns}}}br':
+                                br_type = child.get(f'{{{word_ns}}}type')
+                                if br_type == 'page':
+                                    next_has_page_break = True
+                            if child.tag == f'{{{word_ns}}}t':
+                                text = child.text or ''
+                                if text.strip():
+                                    next_has_content = True
+                        
+                        # If consecutive page breaks, mark one for removal
+                        if next_has_page_break and not next_has_content:
+                            elements_to_remove.append(elem)
+        
+        i += 1
+    
+    # Also look for paragraphs that are empty (only whitespace) followed by page break
+    paragraphs = doc.paragraphs
+    for idx, para in enumerate(paragraphs):
+        text = para.text.strip()
+        # Check if paragraph is empty or only whitespace
+        if not text:
+            # Check if this empty paragraph is between two page breaks (creates blank page)
+            para_elem = para._element
+            prev_sibling = para_elem.getprevious()
+            next_sibling = para_elem.getnext()
+            
+            def is_page_break_para(elem):
+                if elem is None:
+                    return False
+                if elem.tag != f'{{{word_ns}}}p':
+                    return False
+                for br in elem.iter(f'{{{word_ns}}}br'):
+                    if br.get(f'{{{word_ns}}}type') == 'page':
+                        return True
+                return False
+            
+            # If sandwiched between page breaks, it's part of a blank page
+            if is_page_break_para(prev_sibling) and is_page_break_para(next_sibling):
+                if para_elem not in elements_to_remove:
+                    elements_to_remove.append(para_elem)
+    
+    # Remove marked elements
+    for elem in elements_to_remove:
+        try:
+            parent = elem.getparent()
+            if parent is not None:
+                parent.remove(elem)
+        except:
+            pass  # Silently ignore if element can't be removed
+
+
 def _get_logo_stream(logo_bytes: Optional[bytes], fallback_path: str | None) -> io.BytesIO | None:
     """Return a BytesIO for the supplied logo, loading fallback path if needed."""
     if logo_bytes:
@@ -9535,8 +9724,7 @@ def call_groq_exec_summary(
         "Generate the Executive Summary strictly as per the instructions.\n"
         "**CRITICAL:** Write 'Our solution is based on the following key characteristics:' only ONCE.\n"
         "**CRITICAL:** Each bullet must be a FULL SENTENCE with context, not just item names.\n"
-        "**CRITICAL:** Do NOT count manual stations separately - mention as 'manual loading point' in induct bullet.\n"
-        "**CRITICAL:** Combine induct lines + manual loading in ONE bullet.\n"
+        "**CRITICAL:** Only mention 'manual loading point' if Manual Loading Point or OPERATOR_STATION is explicitly listed in the DXF components above. Do NOT add 'along with manual loading point' unless it is clearly present in the data.\n"
         "**CRITICAL:** Combine all chute types in ONE bullet with counts."
     )
     if gating_issues:
@@ -15714,7 +15902,7 @@ def generate_system_description_from_sd_sys(dxf_path: Path, costing_file_upload,
                     manual_induct_subcomponents["Receiving Conveyor"] = count_val
                 elif "buffer" in name_lower:
                     manual_induct_subcomponents["Buffer Conveyors"] = count_val
-                elif "weigh" in name_lower:
+                elif "Weighing" in name_lower:
                     manual_induct_subcomponents["Weighing Conveyor"] = count_val
                 elif "spacing" in name_lower or "position" in name_lower:
                     manual_induct_subcomponents["Spacing Conveyor"] = count_val
@@ -15803,6 +15991,21 @@ def generate_system_description_from_sd_sys(dxf_path: Path, costing_file_upload,
                     output_map[canon_name] = int(count) if str(count).isdigit() else 1
                 if output_map:
                     manual_detected["Output Chutes"] = output_map
+
+            # Handle "Others" section - user-added custom components
+            others_section = configured_comps.get("others", {})
+            others_components = others_section.get("components", []) if isinstance(others_section, dict) else []
+            if others_components:
+                other_items = {}
+                for comp in others_components:
+                    name = str(comp.get("name", "")).strip()
+                    if not name:
+                        continue
+                    count = comp.get("count", 1)
+                    other_items[name] = int(count) if str(count).isdigit() else 1
+                if other_items:
+                    manual_detected["Additional Components"] = other_items
+                    logger.info(f"Added user-added components from Others section: {list(other_items.keys())}")
 
             detected = manual_detected
             logger.info(f"Using manually confirmed components from dialog: {len(configured_comps)} sections")
@@ -16067,6 +16270,9 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                         # Get manual components context if available
                         manual_components_ctx = st.session_state.get("manual_components_context", None)
                         
+                        # Get auto/manual induct flag from user confirmation
+                        is_auto_induct = st.session_state.get("is_auto_induct_confirmed", False)
+                        
                         process_flow_text, iteration_details = call_groq_for_process_flow(
                             client_name,
                             project_name,
@@ -16074,6 +16280,7 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                             facts=facts,
                             context=context,
                             manual_components_context=manual_components_ctx,
+                            is_auto_induct=is_auto_induct,
                         )
                         # Store for feedback regeneration
                         st.session_state.section_content_proposed_system = process_flow_text
@@ -16728,6 +16935,12 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                     )
                 except Exception as e:
                     pass  # Silent fail for header/footer
+
+                # === Remove blank pages before final save ===
+                try:
+                    remove_blank_pages(doc)
+                except Exception as e:
+                    pass  # Silent fail for blank page removal
 
                 progress_bar.progress(95, text="Packaging your proposal...")
                 time.sleep(0.3)

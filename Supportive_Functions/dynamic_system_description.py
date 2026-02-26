@@ -356,19 +356,30 @@ def render_system_description(
     
     # Assemble final text with sales-oriented phase headers
     final_parts = []
+    
+    # Default descriptions for phases when no components are found
+    default_phase_descriptions = {
+        "INFEED": "Infeed Conveyors: Incoming shipments arrive at the infeed conveyor system, where they are smoothly transported and prepared for processing. The infeed system ensures efficient handling of shipments from arrival to the induction zone—maintaining high throughput with minimal bottlenecks. Shipments ascend via inclined conveyors and are directed towards the distribution or induction area for further processing.",
+    }
+    
     for phase in PHASES:
+        # Sales-friendly headers that emphasize the journey
+        phase_header = {
+            "INFEED": "Where It All Begins: Infeed System",
+            "INDUCT": "Precision Handling: Induction System",
+            "MAIN_LOOP": "High-Speed Sorting: The Main Loop",
+            "OUTPUT": "Ready for Dispatch: Output Chutes",
+            "BAGGING": "Final Touch: Bagging System"
+        }.get(phase, phase.replace("_", " ").title())
+        
         if phases_content[phase]:
-            # Sales-friendly headers that emphasize the journey
-            phase_header = {
-                "INFEED": "Where It All Begins: Infeed System",
-                "INDUCT": "Precision Handling: Induction System",
-                "MAIN_LOOP": "High-Speed Sorting: The Main Loop",
-                "OUTPUT": "Ready for Dispatch: Output Chutes",
-                "BAGGING": "Final Touch: Bagging System"
-            }.get(phase, phase.replace("_", " ").title())
-            
             final_parts.append(f"\n## {phase_header}\n")
             final_parts.extend(phases_content[phase])
+        elif phase == "INFEED":
+            # Always include INFEED section even when count is 0
+            # (DXF extraction may miss infeed components, but every system has infeed)
+            final_parts.append(f"\n## {phase_header}\n")
+            final_parts.append(default_phase_descriptions["INFEED"])
     
     final_text = "\n\n".join(final_parts)
     

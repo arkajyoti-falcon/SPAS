@@ -520,7 +520,8 @@ def build_detected_json(metrics: Dict[str, Any]) -> Dict[str, Any]:
     """
     det: Dict[str, Any] = {}
 
-    # Infeed System (base)
+    # Infeed System (base) - ALWAYS include infeed, even if count is 0
+    # (DXF extraction may miss infeed components, but every system has infeed)
     infeed: Dict[str, Any] = {}
     if metrics.get("TEL. BELT CONVEYOR COUNT", 0) > 0:
         infeed["Telescopic Belt Conveyor"] = int(metrics["TEL. BELT CONVEYOR COUNT"])
@@ -528,8 +529,13 @@ def build_detected_json(metrics: Dict[str, Any]) -> Dict[str, Any]:
         infeed["Infeed Conveyors"] = int(metrics["INFEED CONVEYOR COUNT"])
     if metrics.get("HAS_VDS_LOOP"):
         infeed["VDS Loop Conveyor"] = max(1, int(metrics.get("VDS LOOP COUNT", 1)))
+    
+    # Always add Infeed System - use default if no components detected
     if infeed:
         det["Infeed System"] = infeed
+    else:
+        # Default infeed when no components were detected from DXF
+        det["Infeed System"] = {"Infeed Conveyors": 1}
 
     # Inducts
     if metrics.get("FEEDLINE COUNT", 0) > 0:
@@ -1046,7 +1052,9 @@ CRITICAL FORMATTING RULES
 
 HARD OUTPUT STRUCTURE (USE ONLY PRESENT ITEMS, AUTO-NUMBER SEQUENTIALLY)
 
-**1. Infeed System**
+**1. Infeed System** (MANDATORY - must ALWAYS be included)
+  - CRITICAL: Every sorting system has an infeed system. Include this section even if no specific infeed components are detected.
+  - If no specific infeed components are in DETECTED JSON -> Infeed System, use the generalized "# Infeed Conveyors -" description from TEMPLATE TEXT
   **1.1 Infeed Conveyors** (if DETECTED JSON -> Infeed System contains any infeed conveyors)
       - If the following infeed subcomponents exist in DETECTED JSON -> Infeed System, add them
         in this exact order (ONLY if present), numbered sequentially:
@@ -1109,6 +1117,13 @@ HARD OUTPUT STRUCTURE (USE ONLY PRESENT ITEMS, AUTO-NUMBER SEQUENTIALLY)
     - Sliding Chutes -> COPY VERBATIM from "# Sliding Chute -" in TEMPLATE TEXT
     - Secondary Chutes -> COPY VERBATIM from "#Secondary Chute (L-Type)" in TEMPLATE TEXT
   - IMPORTANT: COPY THE ENTIRE MULTI-LINE DESCRIPTION from TEMPLATE TEXT - DO NOT SUMMARIZE INTO ONE LINE
+
+**5. Additional Components** (OPTIONAL - only if present in DETECTED JSON -> "Additional Components")
+  - This section contains user-added custom components
+  - For each component in DETECTED JSON -> "Additional Components":
+    - Create a sub-section with the component name as heading
+    - Use the description from "# Additional Components -" or "# Custom Component -" in TEMPLATE TEXT
+    - Include the count if available
 
 DESCRIPTION RULE (ABSOLUTELY CRITICAL - READ THIS CAREFULLY)
 - For EVERY component and subcomponent, find its description in TEMPLATE TEXT (marked with # Component Name -)

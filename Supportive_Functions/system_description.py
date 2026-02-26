@@ -940,6 +940,7 @@ def call_groq_for_system_description(
     process_flow: str,
     spec_rows: list[dict],
     boq_rows: list[dict],
+    user_added_components: list[dict] = None,
 ) -> list[dict]:
     """
     Returns a list of sections:
@@ -947,6 +948,12 @@ def call_groq_for_system_description(
       {"section_number": "11.1", "title": "Auto Infeed Conveyor", "paragraphs": ["...", "..."]},
       ...
     ]
+    
+    Args:
+        process_flow: The process flow text
+        spec_rows: Specification table rows
+        boq_rows: Conveyor BOQ rows
+        user_added_components: Optional list of user-added components that MUST be included
     """
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY is not set")
@@ -958,6 +965,7 @@ You will receive:
 - 'process_flow': numbered steps of the Process Flow of the System.
 - 'spec_table': rows from the conveyor Specification table (Specification/UOM/Remark).
 - 'conveyor_boq': rows from the Conveyor BOQ (S No., Conveyor Type, EL_1, EL_2, Length, Width, Set, Family).
+- 'user_added_components': (if provided) components manually added by the user that MUST be included in the system description.
 
 Write only the component-wise 'System description' – similar in style and depth to a typical Falcon proposal.
 DO NOT repeat the process flow text verbatim. Use it as guidance for which modules exist and in what order.
@@ -981,14 +989,17 @@ Rules:
 }
 
 - 'section_number' must start at "11.1" for the infeed / conveyor module that corresponds to the first process flow step.
+- **CRITICAL: Section 11.1 (Infeed System) MUST ALWAYS be included.** Even if infeed components are not explicitly listed, every CBS system has an infeed system. Describe it with standard infeed conveyor characteristics (conveyor belt width, drive motor, speed, etc.).
 - The first section 11.1 should clearly describe the Infeed / Auto Infeed Conveyor system.
   Use information from 'spec_table' where useful (belt width, MOC, roller material, etc.) in prose form.
+- **IMPORTANT: If 'user_added_components' is provided, you MUST include a section describing each user-added component.** These are components the user has specifically added and must appear in the system description.
 - Subsequent sections (11.2, 11.3, ...) should cover:
   - Auto Induct / Feedlines
   - Manual Induct (if present)
   - Loop Cross Belt Sorter
   - Scanning & Dimensioning
   - Output chutes / PTL / bagging / recirculation as relevant
+  - Any user-added components
 - Keep each section to 1–3 paragraphs of technical proposal language.
 - DO NOT try to output any tables or images; only paragraphs.
 - DO NOT include any keys other than: section_number, title, paragraphs.
@@ -999,6 +1010,10 @@ Rules:
         "spec_table": spec_rows,
         "conveyor_boq": boq_rows,
     }
+    
+    # Include user-added components if provided
+    if user_added_components:
+        user_payload["user_added_components"] = user_added_components
 
     payload = {
         "model": "llama-3.3-70b-versatile",

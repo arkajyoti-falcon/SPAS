@@ -8,9 +8,10 @@ adjustable conveying solutions are required, such as loading and unloading truck
 • Labor-Efficient
 
 #Infeed Conveyor - 
-Infeed conveyor system consists of below components: 
-1. Add subcomponent 1 of Infeed System 
-2. Add subcomponent 2 of Infeed System 
+The infeed conveyor system forms the entry point for all incoming shipments into the sorting facility. Shipments arrive at the infeed area and are smoothly transported towards the induction zone. The infeed conveyors are designed to handle various parcel sizes and weights, ensuring efficient flow management and maintaining throughput even during peak operations. The system includes powered belt conveyors that guide shipments in a singulated manner, preparing them for accurate induction onto the sorter. Key features include robust construction, low maintenance requirements, and seamless integration with downstream conveyor modules.
+
+#Infeed Conveyors - 
+The infeed conveyor system forms the entry point for all incoming shipments into the sorting facility. Shipments arrive at the infeed area and are smoothly transported towards the induction zone. The infeed conveyors are designed to handle various parcel sizes and weights, ensuring efficient flow management and maintaining throughput even during peak operations. The system includes powered belt conveyors that guide shipments in a singulated manner, preparing them for accurate induction onto the sorter. Key features include robust construction, low maintenance requirements, and seamless integration with downstream conveyor modules.
 
 # Straight and Inclined Powered Belt Conveyor - 
 Falcon’s Belt Conveyors are modular & robust in design, used for smooth conveying of products over Straight, inclined and declined paths. MS profile is used to build conveyor frame.  The conveyors are supplied with the necessary supports and bolts to fix them to the supporting plane, as well as with the junction elements allowing easy and jam-free passage from one conveyor to the 
@@ -258,3 +259,8 @@ collect the shipments into trolleys placed at the end of each chute.
 The system is planned with [COUNT OF COLLECTION CHUTE] collection type chutes for big shipments. The shipments will get 
 sorted inside the collection trolleys from where the operator will pick the shipments, scan their 
 barcode with HHT’s and then place them on their respective pallets.
+# Additional Components -
+The system also includes additional components as specified in the project requirements. These components are integrated to enhance the overall functionality, efficiency, and throughput of the sorting system. Each component is designed to meet the specific operational requirements of the facility and ensure seamless integration with the existing material handling infrastructure.
+
+# Custom Component -
+This component is included as per the specific project requirements. It is designed and configured to integrate with the overall sorting system, ensuring optimal performance and reliability during operations.
