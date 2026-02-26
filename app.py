@@ -425,6 +425,7 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
             "success": False,
             "infeed_system": {"vds": "unknown"},
             "induct": [],
+            "feedline_count": None,
             "main_loop": {"type": "unknown"},
             "output_chutes": [],
             "error": None
@@ -451,6 +452,17 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
             kv = read_section_kv(wb[costing_sheet], "Main Inducts")
             induct_counts = extract_induct_counts_no_calc(kv)
             
+            # Extract feedline count (total number of inducts in the system)
+            feedline_count = None
+            for k, v in kv.items():
+                kl = k.lower()
+                if ("total number of inducts" in kl) or ("number of inducts" in kl and "system" in kl):
+                    try:
+                        feedline_count = int(v) if v is not None else None
+                        break
+                    except (ValueError, TypeError):
+                        pass
+            
             induct_components = [
                 {"component": "Intelligent Angle Merge Conveyor", "count": induct_counts["intelligent_angle_merge"]},
                 {"component": "Buffer Conveyor", "count": induct_counts["buffer_conveyor"]},
@@ -460,6 +472,7 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
             ]
             # Filter out zero counts
             extracted["induct"] = [x for x in induct_components if int(x["count"]) != 0]
+            extracted["feedline_count"] = feedline_count
         except Exception as e:
             logger.warning(f"Could not extract induct components: {e}")
         
@@ -479,6 +492,7 @@ def extract_all_components_from_costing_sheet(costing_file) -> Dict[str, Any]:
             "success": False,
             "infeed_system": {"vds": "unknown"},
             "induct": [],
+            "feedline_count": None,
             "main_loop": {"type": "unknown"},
             "output_chutes": [],
             "error": str(e)
@@ -11509,13 +11523,16 @@ else:
                 # Show summary of costing sheet components
                 if costing_sheet_data and costing_sheet_data.get("success"):
                     st.markdown("**✓ Costing Sheet Summary:**")
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Main Loop", costing_sheet_data.get("main_loop", {}).get("type", "Unknown"))
                     with col2:
                         vds = costing_sheet_data.get("infeed_system", {}).get("vds", "unknown")
                         st.metric("VDS", "HAS" if vds == "has" else "NOT HAS" if vds == "not_has" else "Unknown")
                     with col3:
+                        feedline_count = costing_sheet_data.get("feedline_count")
+                        st.metric("Feedlines / Inducts", feedline_count if feedline_count is not None else "N/A")
+                    with col4:
                         total_components = len(costing_sheet_data.get("induct", [])) + len(costing_sheet_data.get("output_chutes", []))
                         st.metric("Components Found", total_components)
 
@@ -15536,12 +15553,26 @@ def generate_system_description_from_sd_sys(dxf_path: Path, costing_file_upload,
     variables["IPP Rate"] = (ipp_rate or "").strip()
     variables["IPP RATE"] = (ipp_rate or "").strip()
 
-    # Prefer context for counts: do not recompute quantities; ensure safe phrasing for missing/zero
+    # Prefer costing Excel for counts (ground truth), then context (DXF), ensure safe phrasing for missing/zero
+    # Feedline Count from costing Excel
+    feedline_from_cost = None
+    if cost_vals and cost_vals.get("FEEDLINE COUNT"):
+        try:
+            feedline_from_cost = int(cost_vals["FEEDLINE COUNT"])
+            variables["Feedline Count"] = feedline_from_cost
+            logger.info(f"Using Feedline Count from costing Excel for variables: {feedline_from_cost}")
+        except (ValueError, TypeError):
+            pass
+    
+    # Fallback to context (DXF) if costing not available
     if context:
         def _ctx_val(key):
             m = context.get(key)
             return m.value
-        variables["Feedline Count"] = _ctx_val("feedlines") or None
+        
+        if feedline_from_cost is None:
+            variables["Feedline Count"] = _ctx_val("feedlines") or None
+        
         total_chutes = sum([(context.get(k).value or 0) for k in [
             "gravity_chutes","mini_gravity_chutes","collection_chutes","rejection_chutes","dispersion_chutes","bulk_chutes","direct_bagging_chutes"
         ]])
@@ -15575,40 +15606,236 @@ def generate_system_description_from_sd_sys(dxf_path: Path, costing_file_upload,
 
     # Override detected counts using ProposalContext (authoritative source of truth)
     # Only overwrite when context has confirmed numeric values - do NOT invent numbers
-    if context:
-        # Feedlines count
-        ctx_feedlines = context.get("feedlines")
-        if ctx_feedlines.value is not None:
-            detected.setdefault("Parcel Inducts / Induction to Sorter", {})
-            detected["Parcel Inducts / Induction to Sorter"].setdefault("Feedlines", {})
-            detected["Parcel Inducts / Induction to Sorter"]["Feedlines"]["Feedline Count"] = ctx_feedlines.value
-            logger.info(f"Override detected Feedline Count from context: {ctx_feedlines.value}")
+    if context or cost_vals:
+        # Feedlines count - PREFER costing Excel over DXF
+        feedline_from_costing = None
+        if cost_vals and cost_vals.get("FEEDLINE COUNT"):
+            try:
+                feedline_from_costing = int(cost_vals["FEEDLINE COUNT"])
+                detected.setdefault("Parcel Inducts / Induction to Sorter", {})
+                detected["Parcel Inducts / Induction to Sorter"].setdefault("Feedlines", {})
+                detected["Parcel Inducts / Induction to Sorter"]["Feedlines"]["Feedline Count"] = feedline_from_costing
+                logger.info(f"Override detected Feedline Count from costing Excel: {feedline_from_costing}")
+            except (ValueError, TypeError):
+                pass
+        
+        # Fallback to DXF context if costing not available
+        if feedline_from_costing is None and context:
+            ctx_feedlines = context.get("feedlines")
+            if ctx_feedlines.value is not None:
+                detected.setdefault("Parcel Inducts / Induction to Sorter", {})
+                detected["Parcel Inducts / Induction to Sorter"].setdefault("Feedlines", {})
+                detected["Parcel Inducts / Induction to Sorter"]["Feedlines"]["Feedline Count"] = ctx_feedlines.value
+                logger.info(f"Override detected Feedline Count from DXF context: {ctx_feedlines.value}")
         
         # Total Chutes: sum all chute types from context
-        chute_keys = ["gravity_chutes", "mini_gravity_chutes", "collection_chutes", 
-                      "rejection_chutes", "dispersion_chutes", "bulk_chutes", "direct_bagging_chutes"]
-        ctx_total_chutes = sum([(context.get(k).value or 0) for k in chute_keys])
-        if ctx_total_chutes > 0:
-            detected["Total Chutes"] = ctx_total_chutes
-            logger.info(f"Override detected Total Chutes from context: {ctx_total_chutes}")
+        if context:
+            chute_keys = ["gravity_chutes", "mini_gravity_chutes", "collection_chutes", 
+                          "rejection_chutes", "dispersion_chutes", "bulk_chutes", "direct_bagging_chutes"]
+            ctx_total_chutes = sum([(context.get(k).value or 0) for k in chute_keys])
+            if ctx_total_chutes > 0:
+                detected["Total Chutes"] = ctx_total_chutes
+                logger.info(f"Override detected Total Chutes from context: {ctx_total_chutes}")
         
         # System Throughput (PPH)
-        ctx_pph = context.get("throughput_pph")
-        if ctx_pph.value is not None:
-            detected["System Throughput (PPH)"] = ctx_pph.value
-            logger.info(f"Override detected System Throughput from context: {ctx_pph.value}")
+        if context:
+            ctx_pph = context.get("throughput_pph")
+            if ctx_pph.value is not None:
+                detected["System Throughput (PPH)"] = ctx_pph.value
+                logger.info(f"Override detected System Throughput from context: {ctx_pph.value}")
 
     # Override with manually confirmed components from user's dialog confirmation
     if manual_components_context:
         configured_comps = manual_components_context.get("configured_components", {})
         if configured_comps:
-            # Merge manually configured components into detected structure
-            for section_name, section_data in configured_comps.items():
-                if isinstance(section_data, dict):
-                    # Simple override: replace detected section with manually confirmed components
-                    detected[section_name] = section_data
-                    logger.info(f"Applied manually confirmed components for section: {section_name}")
-            logger.info(f"Using manually configured components from dialog: {len(configured_comps)} sections")
+            manual_detected = {}
+
+            # Infeed System
+            infeed_section = configured_comps.get("infeed_system", {})
+            infeed_components = infeed_section.get("components", []) if isinstance(infeed_section, dict) else []
+            def _norm_infeed_name(raw_name: str) -> str:
+                name_lower = raw_name.lower()
+                if "straight" in name_lower and "inclined" in name_lower:
+                    return "Straight and Inclined conveyor"
+                if "plastic" in name_lower and "modular" in name_lower:
+                    return "Plastic Modular conveyor"
+                if "curve" in name_lower:
+                    return "Curve conveyor"
+                if "buffer" in name_lower:
+                    return "Buffer conveyor"
+                if "align" in name_lower:
+                    return "Alligning conveyor"
+                if "belt" in name_lower and "merge" in name_lower:
+                    return "Belt merge"
+                if "vds" in name_lower and "loop" in name_lower:
+                    return "VDS Loop Conveyor"
+                if "telescopic" in name_lower:
+                    return "Telescopic Belt Conveyor"
+                return raw_name.strip()
+
+            if infeed_components:
+                infeed_map = {}
+                for comp in infeed_components:
+                    name = str(comp.get("name", "")).strip()
+                    if not name:
+                        continue
+                    count = comp.get("count", 1)
+                    canon_name = _norm_infeed_name(name)
+                    infeed_map[canon_name] = int(count) if str(count).isdigit() else 1
+                if infeed_map:
+                    manual_detected["Infeed System"] = infeed_map
+
+            # Induct / Feedlines
+            induct_section = configured_comps.get("induct", {})
+            induct_components = induct_section.get("components", []) if isinstance(induct_section, dict) else []
+            feedline_count = None
+            manual_induct_subcomponents = {}
+            manual_induct_stations = 0
+            for comp in induct_components:
+                name = str(comp.get("name", "")).strip()
+                if not name:
+                    continue
+                name_lower = name.lower()
+                count = comp.get("count", 1)
+                count_val = int(count) if str(count).isdigit() else 1
+
+                if "feedline" in name_lower:
+                    feedline_count = count_val
+                    continue
+                if "manual" in name_lower or "operator" in name_lower:
+                    manual_induct_stations += count_val
+                    continue
+
+                if "orientation" in name_lower:
+                    manual_induct_subcomponents["Orientation / Loading Conveyor"] = count_val
+                elif "loading" in name_lower:
+                    manual_induct_subcomponents["Loading Conveyor"] = count_val
+                elif "receiving" in name_lower:
+                    manual_induct_subcomponents["Receiving Conveyor"] = count_val
+                elif "buffer" in name_lower:
+                    manual_induct_subcomponents["Buffer Conveyors"] = count_val
+                elif "weigh" in name_lower:
+                    manual_induct_subcomponents["Weighing Conveyor"] = count_val
+                elif "spacing" in name_lower or "position" in name_lower:
+                    manual_induct_subcomponents["Spacing Conveyor"] = count_val
+                elif "angle" in name_lower and "merge" in name_lower:
+                    manual_induct_subcomponents["Angle Merge"] = count_val
+                elif "merge" in name_lower:
+                    manual_induct_subcomponents["Intelligent Merge Conveyor"] = count_val
+
+            if feedline_count is None and context:
+                # FIRST: Try to get from costing Excel (ground truth)
+                if cost_vals and cost_vals.get("FEEDLINE COUNT"):
+                    try:
+                        feedline_count = int(cost_vals["FEEDLINE COUNT"])
+                        logger.info(f"Using feedline count from costing sheet: {feedline_count}")
+                    except (ValueError, TypeError):
+                        pass
+                
+                # FALLBACK: Use DXF context if costing not available
+                if feedline_count is None:
+                    ctx_feedlines = context.get("feedlines")
+                    if ctx_feedlines and ctx_feedlines.value is not None:
+                        feedline_count = int(ctx_feedlines.value)
+                        logger.info(f"Using feedline count from DXF: {feedline_count}")
+
+            if feedline_count is None and manual_induct_subcomponents:
+                feedline_count = 1
+
+            if feedline_count or manual_induct_subcomponents or manual_induct_stations:
+                manual_detected.setdefault("Parcel Inducts / Induction to Sorter", {})
+                feedline_payload = {
+                    "Feedline Count": int(feedline_count or 0),
+                    "Subcomponents": manual_induct_subcomponents,
+                }
+                manual_detected["Parcel Inducts / Induction to Sorter"]["Feedlines"] = feedline_payload
+                if manual_induct_stations:
+                    manual_detected["Parcel Inducts / Induction to Sorter"]["Manual Induct Stations"] = {
+                        "Manual Induct Station Count": manual_induct_stations
+                    }
+
+            # CBS Type from manual sorter components if present
+            sorter_section = configured_comps.get("sorter", {})
+            sorter_components = sorter_section.get("components", []) if isinstance(sorter_section, dict) else []
+            cbs_type = None
+            for comp in sorter_components:
+                name = str(comp.get("name", "")).strip().lower()
+                if "loop" in name:
+                    cbs_type = "Loop CBS"
+                if "linear" in name:
+                    cbs_type = "Linear CBS"
+            if cbs_type:
+                manual_detected["CBS"] = {"Type": cbs_type}
+
+            # Output Chutes
+            output_section = configured_comps.get("output_chutes", {})
+            output_components = output_section.get("components", []) if isinstance(output_section, dict) else []
+            def _norm_output_name(raw_name: str) -> str:
+                name_lower = raw_name.lower()
+                if "direct" in name_lower and "bag" in name_lower:
+                    return "Direct Bagging Chutes"
+                if "mini" in name_lower and "gravity" in name_lower:
+                    return "Mini-Gravity Chutes"
+                if "gravity" in name_lower:
+                    return "Gravity Chutes"
+                if "collection" in name_lower:
+                    return "Collection Chutes"
+                if "dispersion" in name_lower:
+                    return "Dispersion Chutes"
+                if "rejection" in name_lower:
+                    return "Rejection Chutes"
+                if "bulk" in name_lower:
+                    return "Bulk Chutes"
+                if "sliding" in name_lower:
+                    return "Sliding Chutes"
+                if "secondary" in name_lower:
+                    return "Secondary Chutes"
+                return raw_name.strip()
+
+            if output_components:
+                output_map = {}
+                for comp in output_components:
+                    name = str(comp.get("name", "")).strip()
+                    if not name:
+                        continue
+                    count = comp.get("count", 1)
+                    canon_name = _norm_output_name(name)
+                    output_map[canon_name] = int(count) if str(count).isdigit() else 1
+                if output_map:
+                    manual_detected["Output Chutes"] = output_map
+
+            detected = manual_detected
+            logger.info(f"Using manually confirmed components from dialog: {len(configured_comps)} sections")
+
+            # Override induct module counts from manual components
+            if manual_induct_subcomponents:
+                loading_count = manual_induct_subcomponents.get("Loading Conveyor", 0)
+                buffer_count = manual_induct_subcomponents.get("Buffer Conveyors", 0)
+                merge_count = manual_induct_subcomponents.get("Intelligent Merge Conveyor", 0)
+                weighing_count = manual_induct_subcomponents.get("Weighing Conveyor", 0)
+                spacing_count = manual_induct_subcomponents.get("Spacing Conveyor", 0)
+                receiving_count = manual_induct_subcomponents.get("Receiving Conveyor", 0)
+                angle_merge_count = manual_induct_subcomponents.get("Angle Merge", 0)
+                total_modules = loading_count + buffer_count + merge_count + weighing_count + spacing_count + receiving_count + angle_merge_count
+
+                if feedline_count:
+                    variables["Feedlines Count"] = str(feedline_count)
+                if total_modules:
+                    variables["Conveyor Module Count"] = str(total_modules)
+                if loading_count:
+                    variables["Loading Conveyor Count"] = str(loading_count)
+                if buffer_count:
+                    variables["Buffer Conveyor Count"] = str(buffer_count)
+                if merge_count:
+                    variables["Intelligent Merge Count"] = str(merge_count)
+                if weighing_count:
+                    variables["Weighing Conveyor Count"] = str(weighing_count)
+                if spacing_count:
+                    variables["Spacing Conveyor Count"] = str(spacing_count)
+                if receiving_count:
+                    variables["Receiving Conveyor Count"] = str(receiving_count)
+                if angle_merge_count:
+                    variables["Angle Merge Count"] = str(angle_merge_count)
 
     # Generate draft and run judge pass
     template_text = sd_sys.load_template_text() if hasattr(sd_sys, "load_template_text") else ""
@@ -15746,8 +15973,9 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                     facts = None
                     facts_error = str(e)
                 
-                # Fallback: populate facts.costing_metrics from sd_sys if not present
-                if facts and (not facts.costing_metrics or not any(facts.costing_metrics.values())) and costing_tmp_path:
+                # ALWAYS extract costing values from sd_sys and merge with facts.costing_metrics
+                # This ensures we get feedline count from "Main Inducts" section (ground truth)
+                if facts and costing_tmp_path:
                     try:
                         raw_cost_vals = sd_sys.extract_costing_values(costing_tmp_path)
                         # Normalize keys into facts.costing_metrics format
@@ -15760,10 +15988,21 @@ if st.session_state.get("page", "input") == "input" and 'generate_clicked' in di
                             # Remove None values
                             normalized_costing = {k: v for k, v in normalized_costing.items() if v is not None}
                             if normalized_costing:
-                                facts.costing_metrics = normalized_costing
-                                logger.info(f"Populated facts.costing_metrics from sd_sys fallback: {normalized_costing}")
+                                # Merge with existing costing_metrics (sd_sys values take priority)
+                                if facts.costing_metrics:
+                                    facts.costing_metrics.update(normalized_costing)
+                                    logger.info(f"Merged sd_sys costing values into facts.costing_metrics: {normalized_costing}")
+                                else:
+                                    facts.costing_metrics = normalized_costing
+                                    logger.info(f"Populated facts.costing_metrics from sd_sys: {normalized_costing}")
+                                
+                                # CRITICAL: Re-populate facts.system_numbers from updated costing_metrics
+                                # This ensures costing values override DXF values in facts.system_numbers
+                                from Supportive_Functions.proposal_facts import populate_from_costing
+                                facts = populate_from_costing(facts, facts.costing_metrics)
+                                logger.info(f"Re-populated facts.system_numbers with costing values (feedlines, etc.)")
                     except Exception as e:
-                        logger.warning(f"sd_sys costing extraction fallback failed: {e}")
+                        logger.warning(f"sd_sys costing extraction failed: {e}")
                 
                 # Extract DXF components
                 progress_bar.progress(15, text="Analyzing layout blueprint...")

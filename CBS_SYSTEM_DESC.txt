@@ -118,6 +118,10 @@ Totes & Boxes.
    • Loading Conveyor- [Loading Conveyor Count] No. 
    • Buffer Conveyor- [Buffer Conveyor Count] No. 
    • Intelligent Merge- [Intelligent Merge Count] No.
+   • Weighing Conveyor- [Weighing Conveyor Count] No.
+   • Spacing Conveyor- [Spacing Conveyor Count] No.
+   • Receiving Conveyor- [Receiving Conveyor Count] No.
+   • Angle Merge- [Angle Merge Count] No.
 
 2. Sensors are placed on the Induct Lines to determine the exact position and dimensions (Length and Width) of the Shipment on the conveyor and prepare the Cross-Belt Cell for receiving the shipment with high precision.
 

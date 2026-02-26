@@ -727,7 +727,9 @@ def extract_costing_values(xlsx_path: Path) -> Dict[str, str]:
             if v is not None:
                 total_chutes = str(v).strip()
                 
-        elif "feedline" in b_str and "count" in b_str:
+        elif ("feedline" in b_str and "count" in b_str) or \
+             ("total number of inducts" in b_str) or \
+             ("number of inducts" in b_str and "system" in b_str):
             v = ws.cell(r, 3).value or ws.cell(r, 4).value
             if v is not None:
                 feedline_count = str(v).strip()
@@ -1070,17 +1072,20 @@ HARD OUTPUT STRUCTURE (USE ONLY PRESENT ITEMS, AUTO-NUMBER SEQUENTIALLY)
     Step 2: Copy the "# Feedlines -" section EXACTLY as written in template:
       - Line 1 MUST start with: "[Type of CBS] CBS has a total [Feedlines Count] Feedlines with [Conveyor Module Count] conveyor modules."
       - Line 2 MUST be: "Each Feedline has the following Conveyor Modules:"
-      - Then list the conveyor modules with placeholders: [Loading Conveyor Count], [Buffer Conveyor Count], [Intelligent Merge Count]
+    - Then list the conveyor modules with placeholders: [Loading Conveyor Count], [Buffer Conveyor Count], [Intelligent Merge Count], [Weighing Conveyor Count], [Spacing Conveyor Count]
       - Lines 2 and 3 about sensors and transfer MUST be copied word-for-word
       - Replace ONLY the [PLACEHOLDER] values with actual numbers from VARIABLES MAP
       - DO NOT change "Each Feedline has the following Conveyor Modules:" to "The feedlines consist of..."
       - DO NOT paraphrase any part of this section
   
-  - After the feedlines paragraph, create numbered sub-sections for components:
-    - Orientation / Loading Conveyor -> COPY VERBATIM from "# Orientation Conveyor" in TEMPLATE TEXT
-    - Buffer Conveyors -> COPY VERBATIM from "# Buffer Conveyor-" in TEMPLATE TEXT
-    - Weighing Conveyor -> COPY VERBATIM from "# Weighing Conveyor-" in TEMPLATE TEXT
-    - Intelligent Merge Conveyor -> COPY VERBATIM from "# Intelligent merge conveyor" in TEMPLATE TEXT
+    - After the feedlines paragraph, create numbered sub-sections for components:
+        - Orientation / Loading Conveyor -> COPY VERBATIM from "# Orientation Conveyor" in TEMPLATE TEXT
+        - Buffer Conveyors -> COPY VERBATIM from "# Buffer Conveyor-" in TEMPLATE TEXT
+        - Weighing Conveyor -> COPY VERBATIM from "# Weighing Conveyor-" in TEMPLATE TEXT
+        - Spacing Conveyor -> COPY VERBATIM from "# Spacing Conveyor-" in TEMPLATE TEXT
+        - Receiving Conveyor -> COPY VERBATIM from "# Receiving Conveyor-" in TEMPLATE TEXT
+        - Angle Merge -> COPY VERBATIM from "# Angle Merge-" in TEMPLATE TEXT
+        - Intelligent Merge Conveyor -> COPY VERBATIM from "# Intelligent merge conveyor" in TEMPLATE TEXT
   - IMPORTANT: COPY THE ENTIRE MULTI-LINE DESCRIPTION from TEMPLATE TEXT - DO NOT SUMMARIZE INTO ONE LINE
 
 **3. Main Loop** OR **3. Main Linear CBS**
@@ -1212,14 +1217,17 @@ B) STRUCTURE (use only present items, auto-number sequentially)
   - Then MUST include the exact numbered structure from template "# Feedlines -":
     1. MUST start with: "[Type of CBS] CBS has a total [X] Feedlines with [Y] conveyor modules."
        Followed by: "Each Feedline has the following Conveyor Modules:"
-       Then bullet list with actual counts: "• Loading Conveyor- [X] No."
+    Then bullet list with actual counts: "• Loading Conveyor- [X] No."
     2. Sensors paragraph (exact text from template about position and dimensions)
     3. Transfer paragraph (exact text from template about spacing and smooth transfer)
-  - After these paragraphs, add subsections numbered sequentially for present components:
-    - Orientation / Loading Conveyor (if present)
-    - Buffer Conveyors (if present)
-    - Weighing Conveyor (if present)
-    - Intelligent Merge Conveyor (if present)
+    - After these paragraphs, add subsections numbered sequentially for present components:
+        - Orientation / Loading Conveyor (if present)
+        - Buffer Conveyors (if present)
+        - Weighing Conveyor (if present)
+        - Spacing Conveyor (if present)
+        - Receiving Conveyor (if present)
+        - Angle Merge (if present)
+        - Intelligent Merge Conveyor (if present)
   
   FORBIDDEN PARAPHRASING:
   - DO NOT change "Each Feedline has the following Conveyor Modules:" to "The feedlines consist of..."
